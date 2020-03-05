@@ -1,0 +1,1132 @@
+<!DOCTYPE html>
+<html>
+  <head>
+    <meta charset="utf-8"/>
+    <title>Test Report</title>
+    <link href="assets/style.css" rel="stylesheet" type="text/css"/></head>
+  <body onLoad="init()">
+    <script>/* This Source Code Form is subject to the terms of the Mozilla Public
+ * License, v. 2.0. If a copy of the MPL was not distributed with this file,
+ * You can obtain one at http://mozilla.org/MPL/2.0/. */
+
+
+function toArray(iter) {
+    if (iter === null) {
+        return null;
+    }
+    return Array.prototype.slice.call(iter);
+}
+
+function find(selector, elem) {
+    if (!elem) {
+        elem = document;
+    }
+    return elem.querySelector(selector);
+}
+
+function find_all(selector, elem) {
+    if (!elem) {
+        elem = document;
+    }
+    return toArray(elem.querySelectorAll(selector));
+}
+
+function sort_column(elem) {
+    toggle_sort_states(elem);
+    var colIndex = toArray(elem.parentNode.childNodes).indexOf(elem);
+    var key;
+    if (elem.classList.contains('numeric')) {
+        key = key_num;
+    } else if (elem.classList.contains('result')) {
+        key = key_result;
+    } else {
+        key = key_alpha;
+    }
+    sort_table(elem, key(colIndex));
+}
+
+function show_all_extras() {
+    find_all('.col-result').forEach(show_extras);
+}
+
+function hide_all_extras() {
+    find_all('.col-result').forEach(hide_extras);
+}
+
+function show_extras(colresult_elem) {
+    var extras = colresult_elem.parentNode.nextElementSibling;
+    var expandcollapse = colresult_elem.firstElementChild;
+    extras.classList.remove("collapsed");
+    expandcollapse.classList.remove("expander");
+    expandcollapse.classList.add("collapser");
+}
+
+function hide_extras(colresult_elem) {
+    var extras = colresult_elem.parentNode.nextElementSibling;
+    var expandcollapse = colresult_elem.firstElementChild;
+    extras.classList.add("collapsed");
+    expandcollapse.classList.remove("collapser");
+    expandcollapse.classList.add("expander");
+}
+
+function show_filters() {
+    var filter_items = document.getElementsByClassName('filter');
+    for (var i = 0; i < filter_items.length; i++)
+        filter_items[i].hidden = false;
+}
+
+function add_collapse() {
+    // Add links for show/hide all
+    var resulttable = find('table#results-table');
+    var showhideall = document.createElement("p");
+    showhideall.innerHTML = '<a href="javascript:show_all_extras()">Show all details</a> / ' +
+                            '<a href="javascript:hide_all_extras()">Hide all details</a>';
+    resulttable.parentElement.insertBefore(showhideall, resulttable);
+
+    // Add show/hide link to each result
+    find_all('.col-result').forEach(function(elem) {
+        var collapsed = get_query_parameter('collapsed') || 'Passed';
+        var extras = elem.parentNode.nextElementSibling;
+        var expandcollapse = document.createElement("span");
+        if (collapsed.includes(elem.innerHTML)) {
+            extras.classList.add("collapsed");
+            expandcollapse.classList.add("expander");
+        } else {
+            expandcollapse.classList.add("collapser");
+        }
+        elem.appendChild(expandcollapse);
+
+        elem.addEventListener("click", function(event) {
+            if (event.currentTarget.parentNode.nextElementSibling.classList.contains("collapsed")) {
+                show_extras(event.currentTarget);
+            } else {
+                hide_extras(event.currentTarget);
+            }
+        });
+    })
+}
+
+function get_query_parameter(name) {
+    var match = RegExp('[?&]' + name + '=([^&]*)').exec(window.location.search);
+    return match && decodeURIComponent(match[1].replace(/\+/g, ' '));
+}
+
+function init () {
+    reset_sort_headers();
+
+    add_collapse();
+
+    show_filters();
+
+    sort_column(find('.initial-sort'));
+
+    find_all('.sortable').forEach(function(elem) {
+        elem.addEventListener("click",
+                              function(event) {
+                                  sort_column(elem);
+                              }, false)
+    });
+
+};
+
+function sort_table(clicked, key_func) {
+    var rows = find_all('.results-table-row');
+    var reversed = !clicked.classList.contains('asc');
+    var sorted_rows = sort(rows, key_func, reversed);
+    /* Whole table is removed here because browsers acts much slower
+     * when appending existing elements.
+     */
+    var thead = document.getElementById("results-table-head");
+    document.getElementById('results-table').remove();
+    var parent = document.createElement("table");
+    parent.id = "results-table";
+    parent.appendChild(thead);
+    sorted_rows.forEach(function(elem) {
+        parent.appendChild(elem);
+    });
+    document.getElementsByTagName("BODY")[0].appendChild(parent);
+}
+
+function sort(items, key_func, reversed) {
+    var sort_array = items.map(function(item, i) {
+        return [key_func(item), i];
+    });
+
+    sort_array.sort(function(a, b) {
+        var key_a = a[0];
+        var key_b = b[0];
+
+        if (key_a == key_b) return 0;
+
+        if (reversed) {
+            return (key_a < key_b ? 1 : -1);
+        } else {
+            return (key_a > key_b ? 1 : -1);
+        }
+    });
+
+    return sort_array.map(function(item) {
+        var index = item[1];
+        return items[index];
+    });
+}
+
+function key_alpha(col_index) {
+    return function(elem) {
+        return elem.childNodes[1].childNodes[col_index].firstChild.data.toLowerCase();
+    };
+}
+
+function key_num(col_index) {
+    return function(elem) {
+        return parseFloat(elem.childNodes[1].childNodes[col_index].firstChild.data);
+    };
+}
+
+function key_result(col_index) {
+    return function(elem) {
+        var strings = ['Error', 'Failed', 'Rerun', 'XFailed', 'XPassed',
+                       'Skipped', 'Passed'];
+        return strings.indexOf(elem.childNodes[1].childNodes[col_index].firstChild.data);
+    };
+}
+
+function reset_sort_headers() {
+    find_all('.sort-icon').forEach(function(elem) {
+        elem.parentNode.removeChild(elem);
+    });
+    find_all('.sortable').forEach(function(elem) {
+        var icon = document.createElement("div");
+        icon.className = "sort-icon";
+        icon.textContent = "vvv";
+        elem.insertBefore(icon, elem.firstChild);
+        elem.classList.remove("desc", "active");
+        elem.classList.add("asc", "inactive");
+    });
+}
+
+function toggle_sort_states(elem) {
+    //if active, toggle between asc and desc
+    if (elem.classList.contains('active')) {
+        elem.classList.toggle('asc');
+        elem.classList.toggle('desc');
+    }
+
+    //if inactive, reset all other functions and add ascending active
+    if (elem.classList.contains('inactive')) {
+        reset_sort_headers();
+        elem.classList.remove('inactive');
+        elem.classList.add('active');
+    }
+}
+
+function is_all_rows_hidden(value) {
+  return value.hidden == false;
+}
+
+function filter_table(elem) {
+    var outcome_att = "data-test-result";
+    var outcome = elem.getAttribute(outcome_att);
+    class_outcome = outcome + " results-table-row";
+    var outcome_rows = document.getElementsByClassName(class_outcome);
+
+    for(var i = 0; i < outcome_rows.length; i++){
+        outcome_rows[i].hidden = !elem.checked;
+    }
+
+    var rows = find_all('.results-table-row').filter(is_all_rows_hidden);
+    var all_rows_hidden = rows.length == 0 ? true : false;
+    var not_found_message = document.getElementById("not-found-message");
+    not_found_message.hidden = !all_rows_hidden;
+}
+</script>
+    <h1>--html=report.html</h1>
+    <p>Report generated on 05-Mar-2020 at 15:14:15 by <a href="https://pypi.python.org/pypi/pytest-html">pytest-html</a> v2.0.1</p>
+    <h2>Environment</h2>
+    <table id="environment">
+      <tr>
+        <td>Packages</td>
+        <td>{&apos;pytest&apos;: &apos;5.3.5&apos;, &apos;py&apos;: &apos;1.8.1&apos;, &apos;pluggy&apos;: &apos;0.13.1&apos;}</td></tr>
+      <tr>
+        <td>Platform</td>
+        <td>Linux-5.3.0-40-generic-x86_64-with-Ubuntu-18.04-bionic</td></tr>
+      <tr>
+        <td>Plugins</td>
+        <td>{&apos;metadata&apos;: &apos;1.8.0&apos;, &apos;html&apos;: &apos;2.0.1&apos;}</td></tr>
+      <tr>
+        <td>Python</td>
+        <td>3.6.8</td></tr></table>
+    <h2>Summary</h2>
+    <p>3 tests ran in 19.91 seconds. </p>
+    <p class="filter" hidden="true">(Un)check the boxes to filter the results.</p><input checked="true" class="filter" data-test-result="passed" hidden="true" name="filter_checkbox" onChange="filter_table(this)" type="checkbox"/><span class="passed">1 passed</span>, <input checked="true" class="filter" data-test-result="skipped" disabled="true" hidden="true" name="filter_checkbox" onChange="filter_table(this)" type="checkbox"/><span class="skipped">0 skipped</span>, <input checked="true" class="filter" data-test-result="failed" hidden="true" name="filter_checkbox" onChange="filter_table(this)" type="checkbox"/><span class="failed">2 failed</span>, <input checked="true" class="filter" data-test-result="error" disabled="true" hidden="true" name="filter_checkbox" onChange="filter_table(this)" type="checkbox"/><span class="error">0 errors</span>, <input checked="true" class="filter" data-test-result="xfailed" disabled="true" hidden="true" name="filter_checkbox" onChange="filter_table(this)" type="checkbox"/><span class="xfailed">0 expected failures</span>, <input checked="true" class="filter" data-test-result="xpassed" disabled="true" hidden="true" name="filter_checkbox" onChange="filter_table(this)" type="checkbox"/><span class="xpassed">0 unexpected passes</span>
+    <h2>Results</h2>
+    <table id="results-table">
+      <thead id="results-table-head">
+        <tr>
+          <th class="sortable result initial-sort" col="result">Result</th>
+          <th class="sortable" col="name">Test</th>
+          <th class="sortable numeric" col="duration">Duration</th>
+          <th>Links</th></tr>
+        <tr hidden="true" id="not-found-message">
+          <th colspan="4">No results found. Try to check the filters</th></tr></thead>
+      <tbody class="failed results-table-row">
+        <tr>
+          <td class="col-result">Failed</td>
+          <td class="col-name">test_homepage.py::TestHomePage::test_formSubmission[getData0]</td>
+          <td class="col-duration">1.18</td>
+          <td class="col-links"></td></tr>
+        <tr>
+          <td class="extra" colspan="4">
+            <div><div><img src="test_homepage.py_TestHomePage_test_formSubmission[getData0].png" alt="screenshot" style="width:304px;height:228px;" onclick="window.open(this.src)" align="right"/></div></div>
+            <div class="log">self = &lt;tests.test_homepage.TestHomePage object at 0x7f8865e06080&gt;, getData = {&#x27;firstname&#x27;: &#x27;hjh&#x27;, &#x27;gender&#x27;: &#x27;Male&#x27;, &#x27;lastname&#x27;: &#x27;jghk&#x27;}<br/><br/>    def test_formSubmission(self,getData):<br/>        log = self.getLogger()<br/>    <br/>        homepage=HomePage(self.driver)<br/>        log.info(&quot;this is the first name&quot;,getData[&quot;firstname&quot;])<br/>        homepage.getName().send_keys(getData[&quot;firstname&quot;])<br/>        homepage.getEmail().send_keys(getData[&quot;lastname&quot;])<br/>        homepage.getCheckBox().click()<br/>        self.selectOptionByText(homepage.getGender(),getData[&quot;gender&quot;])<br/>    <br/>    <br/>        homepage.submitForm().click()<br/>    <br/>        alertText = homepage.getSuccessMessage().text<br/>    <br/>&gt;       assert (&quot;Succesfghdhfs&quot; in alertText)<br/><span class="error">E       AssertionError: assert &#x27;Succesfghdhfs&#x27; in &#x27;×\nSuccess! The Form has been submitted successfully!.&#x27;</span><br/><br/>test_homepage.py:29: AssertionError<br/> ------------------------------Captured stderr call------------------------------ <br/>--- Logging error ---
+Traceback (most recent call last):
+  File &quot;/usr/lib/python3.6/logging/__init__.py&quot;, line 994, in emit
+    msg = self.format(record)
+  File &quot;/usr/lib/python3.6/logging/__init__.py&quot;, line 840, in format
+    return fmt.format(record)
+  File &quot;/usr/lib/python3.6/logging/__init__.py&quot;, line 577, in format
+    record.message = record.getMessage()
+  File &quot;/usr/lib/python3.6/logging/__init__.py&quot;, line 338, in getMessage
+    msg = msg % self.args
+TypeError: not all arguments converted during string formatting
+Call stack:
+  File &quot;/home/bridgeit/PycharmProjects/Pythonautomation/venv/bin/py.test&quot;, line 10, in &lt;module&gt;
+    sys.exit(main())
+  File &quot;/home/bridgeit/PycharmProjects/Pythonautomation/venv/lib/python3.6/site-packages/_pytest/config/__init__.py&quot;, line 93, in main
+    config=config
+  File &quot;/home/bridgeit/PycharmProjects/Pythonautomation/venv/lib/python3.6/site-packages/pluggy/hooks.py&quot;, line 286, in __call__
+    return self._hookexec(self, self.get_hookimpls(), kwargs)
+  File &quot;/home/bridgeit/PycharmProjects/Pythonautomation/venv/lib/python3.6/site-packages/pluggy/manager.py&quot;, line 93, in _hookexec
+    return self._inner_hookexec(hook, methods, kwargs)
+  File &quot;/home/bridgeit/PycharmProjects/Pythonautomation/venv/lib/python3.6/site-packages/pluggy/manager.py&quot;, line 87, in &lt;lambda&gt;
+    firstresult=hook.spec.opts.get(&quot;firstresult&quot;) if hook.spec else False,
+  File &quot;/home/bridgeit/PycharmProjects/Pythonautomation/venv/lib/python3.6/site-packages/pluggy/callers.py&quot;, line 187, in _multicall
+    res = hook_impl.function(*args)
+  File &quot;/home/bridgeit/PycharmProjects/Pythonautomation/venv/lib/python3.6/site-packages/_pytest/main.py&quot;, line 240, in pytest_cmdline_main
+    return wrap_session(config, _main)
+  File &quot;/home/bridgeit/PycharmProjects/Pythonautomation/venv/lib/python3.6/site-packages/_pytest/main.py&quot;, line 197, in wrap_session
+    session.exitstatus = doit(config, session) or 0
+  File &quot;/home/bridgeit/PycharmProjects/Pythonautomation/venv/lib/python3.6/site-packages/_pytest/main.py&quot;, line 247, in _main
+    config.hook.pytest_runtestloop(session=session)
+  File &quot;/home/bridgeit/PycharmProjects/Pythonautomation/venv/lib/python3.6/site-packages/pluggy/hooks.py&quot;, line 286, in __call__
+    return self._hookexec(self, self.get_hookimpls(), kwargs)
+  File &quot;/home/bridgeit/PycharmProjects/Pythonautomation/venv/lib/python3.6/site-packages/pluggy/manager.py&quot;, line 93, in _hookexec
+    return self._inner_hookexec(hook, methods, kwargs)
+  File &quot;/home/bridgeit/PycharmProjects/Pythonautomation/venv/lib/python3.6/site-packages/pluggy/manager.py&quot;, line 87, in &lt;lambda&gt;
+    firstresult=hook.spec.opts.get(&quot;firstresult&quot;) if hook.spec else False,
+  File &quot;/home/bridgeit/PycharmProjects/Pythonautomation/venv/lib/python3.6/site-packages/pluggy/callers.py&quot;, line 187, in _multicall
+    res = hook_impl.function(*args)
+  File &quot;/home/bridgeit/PycharmProjects/Pythonautomation/venv/lib/python3.6/site-packages/_pytest/main.py&quot;, line 271, in pytest_runtestloop
+    item.config.hook.pytest_runtest_protocol(item=item, nextitem=nextitem)
+  File &quot;/home/bridgeit/PycharmProjects/Pythonautomation/venv/lib/python3.6/site-packages/pluggy/hooks.py&quot;, line 286, in __call__
+    return self._hookexec(self, self.get_hookimpls(), kwargs)
+  File &quot;/home/bridgeit/PycharmProjects/Pythonautomation/venv/lib/python3.6/site-packages/pluggy/manager.py&quot;, line 93, in _hookexec
+    return self._inner_hookexec(hook, methods, kwargs)
+  File &quot;/home/bridgeit/PycharmProjects/Pythonautomation/venv/lib/python3.6/site-packages/pluggy/manager.py&quot;, line 87, in &lt;lambda&gt;
+    firstresult=hook.spec.opts.get(&quot;firstresult&quot;) if hook.spec else False,
+  File &quot;/home/bridgeit/PycharmProjects/Pythonautomation/venv/lib/python3.6/site-packages/pluggy/callers.py&quot;, line 187, in _multicall
+    res = hook_impl.function(*args)
+  File &quot;/home/bridgeit/PycharmProjects/Pythonautomation/venv/lib/python3.6/site-packages/_pytest/runner.py&quot;, line 84, in pytest_runtest_protocol
+    runtestprotocol(item, nextitem=nextitem)
+  File &quot;/home/bridgeit/PycharmProjects/Pythonautomation/venv/lib/python3.6/site-packages/_pytest/runner.py&quot;, line 99, in runtestprotocol
+    reports.append(call_and_report(item, &quot;call&quot;, log))
+  File &quot;/home/bridgeit/PycharmProjects/Pythonautomation/venv/lib/python3.6/site-packages/_pytest/runner.py&quot;, line 185, in call_and_report
+    call = call_runtest_hook(item, when, **kwds)
+  File &quot;/home/bridgeit/PycharmProjects/Pythonautomation/venv/lib/python3.6/site-packages/_pytest/runner.py&quot;, line 210, in call_runtest_hook
+    lambda: ihook(item=item, **kwds), when=when, reraise=reraise
+  File &quot;/home/bridgeit/PycharmProjects/Pythonautomation/venv/lib/python3.6/site-packages/_pytest/runner.py&quot;, line 237, in from_call
+    result = func()
+  File &quot;/home/bridgeit/PycharmProjects/Pythonautomation/venv/lib/python3.6/site-packages/_pytest/runner.py&quot;, line 210, in &lt;lambda&gt;
+    lambda: ihook(item=item, **kwds), when=when, reraise=reraise
+  File &quot;/home/bridgeit/PycharmProjects/Pythonautomation/venv/lib/python3.6/site-packages/pluggy/hooks.py&quot;, line 286, in __call__
+    return self._hookexec(self, self.get_hookimpls(), kwargs)
+  File &quot;/home/bridgeit/PycharmProjects/Pythonautomation/venv/lib/python3.6/site-packages/pluggy/manager.py&quot;, line 93, in _hookexec
+    return self._inner_hookexec(hook, methods, kwargs)
+  File &quot;/home/bridgeit/PycharmProjects/Pythonautomation/venv/lib/python3.6/site-packages/pluggy/manager.py&quot;, line 87, in &lt;lambda&gt;
+    firstresult=hook.spec.opts.get(&quot;firstresult&quot;) if hook.spec else False,
+  File &quot;/home/bridgeit/PycharmProjects/Pythonautomation/venv/lib/python3.6/site-packages/pluggy/callers.py&quot;, line 187, in _multicall
+    res = hook_impl.function(*args)
+  File &quot;/home/bridgeit/PycharmProjects/Pythonautomation/venv/lib/python3.6/site-packages/_pytest/runner.py&quot;, line 134, in pytest_runtest_call
+    item.runtest()
+  File &quot;/home/bridgeit/PycharmProjects/Pythonautomation/venv/lib/python3.6/site-packages/_pytest/python.py&quot;, line 1445, in runtest
+    self.ihook.pytest_pyfunc_call(pyfuncitem=self)
+  File &quot;/home/bridgeit/PycharmProjects/Pythonautomation/venv/lib/python3.6/site-packages/pluggy/hooks.py&quot;, line 286, in __call__
+    return self._hookexec(self, self.get_hookimpls(), kwargs)
+  File &quot;/home/bridgeit/PycharmProjects/Pythonautomation/venv/lib/python3.6/site-packages/pluggy/manager.py&quot;, line 93, in _hookexec
+    return self._inner_hookexec(hook, methods, kwargs)
+  File &quot;/home/bridgeit/PycharmProjects/Pythonautomation/venv/lib/python3.6/site-packages/pluggy/manager.py&quot;, line 87, in &lt;lambda&gt;
+    firstresult=hook.spec.opts.get(&quot;firstresult&quot;) if hook.spec else False,
+  File &quot;/home/bridgeit/PycharmProjects/Pythonautomation/venv/lib/python3.6/site-packages/pluggy/callers.py&quot;, line 187, in _multicall
+    res = hook_impl.function(*args)
+  File &quot;/home/bridgeit/PycharmProjects/Pythonautomation/venv/lib/python3.6/site-packages/_pytest/python.py&quot;, line 167, in pytest_pyfunc_call
+    result = testfunction(**testargs)
+  File &quot;/home/bridgeit/PycharmProjects/Pythonautomation/tests/test_homepage.py&quot;, line 18, in test_formSubmission
+    log.info(&quot;this is the first name&quot;,getData[&quot;firstname&quot;])
+Message: &#x27;this is the first name&#x27;
+Arguments: (&#x27;hjh&#x27;,)
+--- Logging error ---
+Traceback (most recent call last):
+  File &quot;/usr/lib/python3.6/logging/__init__.py&quot;, line 994, in emit
+    msg = self.format(record)
+  File &quot;/usr/lib/python3.6/logging/__init__.py&quot;, line 840, in format
+    return fmt.format(record)
+  File &quot;/home/bridgeit/PycharmProjects/Pythonautomation/venv/lib/python3.6/site-packages/_pytest/logging.py&quot;, line 70, in format
+    return super().format(record)
+  File &quot;/usr/lib/python3.6/logging/__init__.py&quot;, line 577, in format
+    record.message = record.getMessage()
+  File &quot;/usr/lib/python3.6/logging/__init__.py&quot;, line 338, in getMessage
+    msg = msg % self.args
+TypeError: not all arguments converted during string formatting
+Call stack:
+  File &quot;/home/bridgeit/PycharmProjects/Pythonautomation/venv/bin/py.test&quot;, line 10, in &lt;module&gt;
+    sys.exit(main())
+  File &quot;/home/bridgeit/PycharmProjects/Pythonautomation/venv/lib/python3.6/site-packages/_pytest/config/__init__.py&quot;, line 93, in main
+    config=config
+  File &quot;/home/bridgeit/PycharmProjects/Pythonautomation/venv/lib/python3.6/site-packages/pluggy/hooks.py&quot;, line 286, in __call__
+    return self._hookexec(self, self.get_hookimpls(), kwargs)
+  File &quot;/home/bridgeit/PycharmProjects/Pythonautomation/venv/lib/python3.6/site-packages/pluggy/manager.py&quot;, line 93, in _hookexec
+    return self._inner_hookexec(hook, methods, kwargs)
+  File &quot;/home/bridgeit/PycharmProjects/Pythonautomation/venv/lib/python3.6/site-packages/pluggy/manager.py&quot;, line 87, in &lt;lambda&gt;
+    firstresult=hook.spec.opts.get(&quot;firstresult&quot;) if hook.spec else False,
+  File &quot;/home/bridgeit/PycharmProjects/Pythonautomation/venv/lib/python3.6/site-packages/pluggy/callers.py&quot;, line 187, in _multicall
+    res = hook_impl.function(*args)
+  File &quot;/home/bridgeit/PycharmProjects/Pythonautomation/venv/lib/python3.6/site-packages/_pytest/main.py&quot;, line 240, in pytest_cmdline_main
+    return wrap_session(config, _main)
+  File &quot;/home/bridgeit/PycharmProjects/Pythonautomation/venv/lib/python3.6/site-packages/_pytest/main.py&quot;, line 197, in wrap_session
+    session.exitstatus = doit(config, session) or 0
+  File &quot;/home/bridgeit/PycharmProjects/Pythonautomation/venv/lib/python3.6/site-packages/_pytest/main.py&quot;, line 247, in _main
+    config.hook.pytest_runtestloop(session=session)
+  File &quot;/home/bridgeit/PycharmProjects/Pythonautomation/venv/lib/python3.6/site-packages/pluggy/hooks.py&quot;, line 286, in __call__
+    return self._hookexec(self, self.get_hookimpls(), kwargs)
+  File &quot;/home/bridgeit/PycharmProjects/Pythonautomation/venv/lib/python3.6/site-packages/pluggy/manager.py&quot;, line 93, in _hookexec
+    return self._inner_hookexec(hook, methods, kwargs)
+  File &quot;/home/bridgeit/PycharmProjects/Pythonautomation/venv/lib/python3.6/site-packages/pluggy/manager.py&quot;, line 87, in &lt;lambda&gt;
+    firstresult=hook.spec.opts.get(&quot;firstresult&quot;) if hook.spec else False,
+  File &quot;/home/bridgeit/PycharmProjects/Pythonautomation/venv/lib/python3.6/site-packages/pluggy/callers.py&quot;, line 187, in _multicall
+    res = hook_impl.function(*args)
+  File &quot;/home/bridgeit/PycharmProjects/Pythonautomation/venv/lib/python3.6/site-packages/_pytest/main.py&quot;, line 271, in pytest_runtestloop
+    item.config.hook.pytest_runtest_protocol(item=item, nextitem=nextitem)
+  File &quot;/home/bridgeit/PycharmProjects/Pythonautomation/venv/lib/python3.6/site-packages/pluggy/hooks.py&quot;, line 286, in __call__
+    return self._hookexec(self, self.get_hookimpls(), kwargs)
+  File &quot;/home/bridgeit/PycharmProjects/Pythonautomation/venv/lib/python3.6/site-packages/pluggy/manager.py&quot;, line 93, in _hookexec
+    return self._inner_hookexec(hook, methods, kwargs)
+  File &quot;/home/bridgeit/PycharmProjects/Pythonautomation/venv/lib/python3.6/site-packages/pluggy/manager.py&quot;, line 87, in &lt;lambda&gt;
+    firstresult=hook.spec.opts.get(&quot;firstresult&quot;) if hook.spec else False,
+  File &quot;/home/bridgeit/PycharmProjects/Pythonautomation/venv/lib/python3.6/site-packages/pluggy/callers.py&quot;, line 187, in _multicall
+    res = hook_impl.function(*args)
+  File &quot;/home/bridgeit/PycharmProjects/Pythonautomation/venv/lib/python3.6/site-packages/_pytest/runner.py&quot;, line 84, in pytest_runtest_protocol
+    runtestprotocol(item, nextitem=nextitem)
+  File &quot;/home/bridgeit/PycharmProjects/Pythonautomation/venv/lib/python3.6/site-packages/_pytest/runner.py&quot;, line 99, in runtestprotocol
+    reports.append(call_and_report(item, &quot;call&quot;, log))
+  File &quot;/home/bridgeit/PycharmProjects/Pythonautomation/venv/lib/python3.6/site-packages/_pytest/runner.py&quot;, line 185, in call_and_report
+    call = call_runtest_hook(item, when, **kwds)
+  File &quot;/home/bridgeit/PycharmProjects/Pythonautomation/venv/lib/python3.6/site-packages/_pytest/runner.py&quot;, line 210, in call_runtest_hook
+    lambda: ihook(item=item, **kwds), when=when, reraise=reraise
+  File &quot;/home/bridgeit/PycharmProjects/Pythonautomation/venv/lib/python3.6/site-packages/_pytest/runner.py&quot;, line 237, in from_call
+    result = func()
+  File &quot;/home/bridgeit/PycharmProjects/Pythonautomation/venv/lib/python3.6/site-packages/_pytest/runner.py&quot;, line 210, in &lt;lambda&gt;
+    lambda: ihook(item=item, **kwds), when=when, reraise=reraise
+  File &quot;/home/bridgeit/PycharmProjects/Pythonautomation/venv/lib/python3.6/site-packages/pluggy/hooks.py&quot;, line 286, in __call__
+    return self._hookexec(self, self.get_hookimpls(), kwargs)
+  File &quot;/home/bridgeit/PycharmProjects/Pythonautomation/venv/lib/python3.6/site-packages/pluggy/manager.py&quot;, line 93, in _hookexec
+    return self._inner_hookexec(hook, methods, kwargs)
+  File &quot;/home/bridgeit/PycharmProjects/Pythonautomation/venv/lib/python3.6/site-packages/pluggy/manager.py&quot;, line 87, in &lt;lambda&gt;
+    firstresult=hook.spec.opts.get(&quot;firstresult&quot;) if hook.spec else False,
+  File &quot;/home/bridgeit/PycharmProjects/Pythonautomation/venv/lib/python3.6/site-packages/pluggy/callers.py&quot;, line 187, in _multicall
+    res = hook_impl.function(*args)
+  File &quot;/home/bridgeit/PycharmProjects/Pythonautomation/venv/lib/python3.6/site-packages/_pytest/runner.py&quot;, line 134, in pytest_runtest_call
+    item.runtest()
+  File &quot;/home/bridgeit/PycharmProjects/Pythonautomation/venv/lib/python3.6/site-packages/_pytest/python.py&quot;, line 1445, in runtest
+    self.ihook.pytest_pyfunc_call(pyfuncitem=self)
+  File &quot;/home/bridgeit/PycharmProjects/Pythonautomation/venv/lib/python3.6/site-packages/pluggy/hooks.py&quot;, line 286, in __call__
+    return self._hookexec(self, self.get_hookimpls(), kwargs)
+  File &quot;/home/bridgeit/PycharmProjects/Pythonautomation/venv/lib/python3.6/site-packages/pluggy/manager.py&quot;, line 93, in _hookexec
+    return self._inner_hookexec(hook, methods, kwargs)
+  File &quot;/home/bridgeit/PycharmProjects/Pythonautomation/venv/lib/python3.6/site-packages/pluggy/manager.py&quot;, line 87, in &lt;lambda&gt;
+    firstresult=hook.spec.opts.get(&quot;firstresult&quot;) if hook.spec else False,
+  File &quot;/home/bridgeit/PycharmProjects/Pythonautomation/venv/lib/python3.6/site-packages/pluggy/callers.py&quot;, line 187, in _multicall
+    res = hook_impl.function(*args)
+  File &quot;/home/bridgeit/PycharmProjects/Pythonautomation/venv/lib/python3.6/site-packages/_pytest/python.py&quot;, line 167, in pytest_pyfunc_call
+    result = testfunction(**testargs)
+  File &quot;/home/bridgeit/PycharmProjects/Pythonautomation/tests/test_homepage.py&quot;, line 18, in test_formSubmission
+    log.info(&quot;this is the first name&quot;,getData[&quot;firstname&quot;])
+  File &quot;/usr/lib/python3.6/logging/__init__.py&quot;, line 1308, in info
+    self._log(INFO, msg, args, **kwargs)
+  File &quot;/usr/lib/python3.6/logging/__init__.py&quot;, line 1444, in _log
+    self.handle(record)
+  File &quot;/usr/lib/python3.6/logging/__init__.py&quot;, line 1454, in handle
+    self.callHandlers(record)
+  File &quot;/usr/lib/python3.6/logging/__init__.py&quot;, line 1516, in callHandlers
+    hdlr.handle(record)
+  File &quot;/usr/lib/python3.6/logging/__init__.py&quot;, line 865, in handle
+    self.emit(record)
+  File &quot;/home/bridgeit/PycharmProjects/Pythonautomation/venv/lib/python3.6/site-packages/_pytest/logging.py&quot;, line 301, in emit
+    logging.StreamHandler.emit(self, record)
+Message: &#x27;this is the first name&#x27;
+Arguments: (&#x27;hjh&#x27;,)
+<br/></div></td></tr></tbody>
+      <tbody class="failed results-table-row">
+        <tr>
+          <td class="col-result">Failed</td>
+          <td class="col-name">test_homepage.py::TestHomePage::test_formSubmission[getData1]</td>
+          <td class="col-duration">0.80</td>
+          <td class="col-links"></td></tr>
+        <tr>
+          <td class="extra" colspan="4">
+            <div><div><img src="test_homepage.py_TestHomePage_test_formSubmission[getData1].png" alt="screenshot" style="width:304px;height:228px;" onclick="window.open(this.src)" align="right"/></div></div>
+            <div class="log">self = &lt;tests.test_homepage.TestHomePage object at 0x7f8865578c50&gt;, getData = {&#x27;firstname&#x27;: &#x27;hjh&#x27;, &#x27;gender&#x27;: &#x27;Female&#x27;, &#x27;lastname&#x27;: &#x27;jghk&#x27;}<br/><br/>    def test_formSubmission(self,getData):<br/>        log = self.getLogger()<br/>    <br/>        homepage=HomePage(self.driver)<br/>        log.info(&quot;this is the first name&quot;,getData[&quot;firstname&quot;])<br/>        homepage.getName().send_keys(getData[&quot;firstname&quot;])<br/>        homepage.getEmail().send_keys(getData[&quot;lastname&quot;])<br/>        homepage.getCheckBox().click()<br/>        self.selectOptionByText(homepage.getGender(),getData[&quot;gender&quot;])<br/>    <br/>    <br/>        homepage.submitForm().click()<br/>    <br/>        alertText = homepage.getSuccessMessage().text<br/>    <br/>&gt;       assert (&quot;Succesfghdhfs&quot; in alertText)<br/><span class="error">E       AssertionError: assert &#x27;Succesfghdhfs&#x27; in &#x27;×\nSuccess! The Form has been submitted successfully!.&#x27;</span><br/><br/>test_homepage.py:29: AssertionError<br/> ------------------------------Captured stderr call------------------------------ <br/>--- Logging error ---
+Traceback (most recent call last):
+  File &quot;/usr/lib/python3.6/logging/__init__.py&quot;, line 994, in emit
+    msg = self.format(record)
+  File &quot;/usr/lib/python3.6/logging/__init__.py&quot;, line 840, in format
+    return fmt.format(record)
+  File &quot;/usr/lib/python3.6/logging/__init__.py&quot;, line 577, in format
+    record.message = record.getMessage()
+  File &quot;/usr/lib/python3.6/logging/__init__.py&quot;, line 338, in getMessage
+    msg = msg % self.args
+TypeError: not all arguments converted during string formatting
+Call stack:
+  File &quot;/home/bridgeit/PycharmProjects/Pythonautomation/venv/bin/py.test&quot;, line 10, in &lt;module&gt;
+    sys.exit(main())
+  File &quot;/home/bridgeit/PycharmProjects/Pythonautomation/venv/lib/python3.6/site-packages/_pytest/config/__init__.py&quot;, line 93, in main
+    config=config
+  File &quot;/home/bridgeit/PycharmProjects/Pythonautomation/venv/lib/python3.6/site-packages/pluggy/hooks.py&quot;, line 286, in __call__
+    return self._hookexec(self, self.get_hookimpls(), kwargs)
+  File &quot;/home/bridgeit/PycharmProjects/Pythonautomation/venv/lib/python3.6/site-packages/pluggy/manager.py&quot;, line 93, in _hookexec
+    return self._inner_hookexec(hook, methods, kwargs)
+  File &quot;/home/bridgeit/PycharmProjects/Pythonautomation/venv/lib/python3.6/site-packages/pluggy/manager.py&quot;, line 87, in &lt;lambda&gt;
+    firstresult=hook.spec.opts.get(&quot;firstresult&quot;) if hook.spec else False,
+  File &quot;/home/bridgeit/PycharmProjects/Pythonautomation/venv/lib/python3.6/site-packages/pluggy/callers.py&quot;, line 187, in _multicall
+    res = hook_impl.function(*args)
+  File &quot;/home/bridgeit/PycharmProjects/Pythonautomation/venv/lib/python3.6/site-packages/_pytest/main.py&quot;, line 240, in pytest_cmdline_main
+    return wrap_session(config, _main)
+  File &quot;/home/bridgeit/PycharmProjects/Pythonautomation/venv/lib/python3.6/site-packages/_pytest/main.py&quot;, line 197, in wrap_session
+    session.exitstatus = doit(config, session) or 0
+  File &quot;/home/bridgeit/PycharmProjects/Pythonautomation/venv/lib/python3.6/site-packages/_pytest/main.py&quot;, line 247, in _main
+    config.hook.pytest_runtestloop(session=session)
+  File &quot;/home/bridgeit/PycharmProjects/Pythonautomation/venv/lib/python3.6/site-packages/pluggy/hooks.py&quot;, line 286, in __call__
+    return self._hookexec(self, self.get_hookimpls(), kwargs)
+  File &quot;/home/bridgeit/PycharmProjects/Pythonautomation/venv/lib/python3.6/site-packages/pluggy/manager.py&quot;, line 93, in _hookexec
+    return self._inner_hookexec(hook, methods, kwargs)
+  File &quot;/home/bridgeit/PycharmProjects/Pythonautomation/venv/lib/python3.6/site-packages/pluggy/manager.py&quot;, line 87, in &lt;lambda&gt;
+    firstresult=hook.spec.opts.get(&quot;firstresult&quot;) if hook.spec else False,
+  File &quot;/home/bridgeit/PycharmProjects/Pythonautomation/venv/lib/python3.6/site-packages/pluggy/callers.py&quot;, line 187, in _multicall
+    res = hook_impl.function(*args)
+  File &quot;/home/bridgeit/PycharmProjects/Pythonautomation/venv/lib/python3.6/site-packages/_pytest/main.py&quot;, line 271, in pytest_runtestloop
+    item.config.hook.pytest_runtest_protocol(item=item, nextitem=nextitem)
+  File &quot;/home/bridgeit/PycharmProjects/Pythonautomation/venv/lib/python3.6/site-packages/pluggy/hooks.py&quot;, line 286, in __call__
+    return self._hookexec(self, self.get_hookimpls(), kwargs)
+  File &quot;/home/bridgeit/PycharmProjects/Pythonautomation/venv/lib/python3.6/site-packages/pluggy/manager.py&quot;, line 93, in _hookexec
+    return self._inner_hookexec(hook, methods, kwargs)
+  File &quot;/home/bridgeit/PycharmProjects/Pythonautomation/venv/lib/python3.6/site-packages/pluggy/manager.py&quot;, line 87, in &lt;lambda&gt;
+    firstresult=hook.spec.opts.get(&quot;firstresult&quot;) if hook.spec else False,
+  File &quot;/home/bridgeit/PycharmProjects/Pythonautomation/venv/lib/python3.6/site-packages/pluggy/callers.py&quot;, line 187, in _multicall
+    res = hook_impl.function(*args)
+  File &quot;/home/bridgeit/PycharmProjects/Pythonautomation/venv/lib/python3.6/site-packages/_pytest/runner.py&quot;, line 84, in pytest_runtest_protocol
+    runtestprotocol(item, nextitem=nextitem)
+  File &quot;/home/bridgeit/PycharmProjects/Pythonautomation/venv/lib/python3.6/site-packages/_pytest/runner.py&quot;, line 99, in runtestprotocol
+    reports.append(call_and_report(item, &quot;call&quot;, log))
+  File &quot;/home/bridgeit/PycharmProjects/Pythonautomation/venv/lib/python3.6/site-packages/_pytest/runner.py&quot;, line 185, in call_and_report
+    call = call_runtest_hook(item, when, **kwds)
+  File &quot;/home/bridgeit/PycharmProjects/Pythonautomation/venv/lib/python3.6/site-packages/_pytest/runner.py&quot;, line 210, in call_runtest_hook
+    lambda: ihook(item=item, **kwds), when=when, reraise=reraise
+  File &quot;/home/bridgeit/PycharmProjects/Pythonautomation/venv/lib/python3.6/site-packages/_pytest/runner.py&quot;, line 237, in from_call
+    result = func()
+  File &quot;/home/bridgeit/PycharmProjects/Pythonautomation/venv/lib/python3.6/site-packages/_pytest/runner.py&quot;, line 210, in &lt;lambda&gt;
+    lambda: ihook(item=item, **kwds), when=when, reraise=reraise
+  File &quot;/home/bridgeit/PycharmProjects/Pythonautomation/venv/lib/python3.6/site-packages/pluggy/hooks.py&quot;, line 286, in __call__
+    return self._hookexec(self, self.get_hookimpls(), kwargs)
+  File &quot;/home/bridgeit/PycharmProjects/Pythonautomation/venv/lib/python3.6/site-packages/pluggy/manager.py&quot;, line 93, in _hookexec
+    return self._inner_hookexec(hook, methods, kwargs)
+  File &quot;/home/bridgeit/PycharmProjects/Pythonautomation/venv/lib/python3.6/site-packages/pluggy/manager.py&quot;, line 87, in &lt;lambda&gt;
+    firstresult=hook.spec.opts.get(&quot;firstresult&quot;) if hook.spec else False,
+  File &quot;/home/bridgeit/PycharmProjects/Pythonautomation/venv/lib/python3.6/site-packages/pluggy/callers.py&quot;, line 187, in _multicall
+    res = hook_impl.function(*args)
+  File &quot;/home/bridgeit/PycharmProjects/Pythonautomation/venv/lib/python3.6/site-packages/_pytest/runner.py&quot;, line 134, in pytest_runtest_call
+    item.runtest()
+  File &quot;/home/bridgeit/PycharmProjects/Pythonautomation/venv/lib/python3.6/site-packages/_pytest/python.py&quot;, line 1445, in runtest
+    self.ihook.pytest_pyfunc_call(pyfuncitem=self)
+  File &quot;/home/bridgeit/PycharmProjects/Pythonautomation/venv/lib/python3.6/site-packages/pluggy/hooks.py&quot;, line 286, in __call__
+    return self._hookexec(self, self.get_hookimpls(), kwargs)
+  File &quot;/home/bridgeit/PycharmProjects/Pythonautomation/venv/lib/python3.6/site-packages/pluggy/manager.py&quot;, line 93, in _hookexec
+    return self._inner_hookexec(hook, methods, kwargs)
+  File &quot;/home/bridgeit/PycharmProjects/Pythonautomation/venv/lib/python3.6/site-packages/pluggy/manager.py&quot;, line 87, in &lt;lambda&gt;
+    firstresult=hook.spec.opts.get(&quot;firstresult&quot;) if hook.spec else False,
+  File &quot;/home/bridgeit/PycharmProjects/Pythonautomation/venv/lib/python3.6/site-packages/pluggy/callers.py&quot;, line 187, in _multicall
+    res = hook_impl.function(*args)
+  File &quot;/home/bridgeit/PycharmProjects/Pythonautomation/venv/lib/python3.6/site-packages/_pytest/python.py&quot;, line 167, in pytest_pyfunc_call
+    result = testfunction(**testargs)
+  File &quot;/home/bridgeit/PycharmProjects/Pythonautomation/tests/test_homepage.py&quot;, line 18, in test_formSubmission
+    log.info(&quot;this is the first name&quot;,getData[&quot;firstname&quot;])
+Message: &#x27;this is the first name&#x27;
+Arguments: (&#x27;hjh&#x27;,)
+--- Logging error ---
+Traceback (most recent call last):
+  File &quot;/usr/lib/python3.6/logging/__init__.py&quot;, line 994, in emit
+    msg = self.format(record)
+  File &quot;/usr/lib/python3.6/logging/__init__.py&quot;, line 840, in format
+    return fmt.format(record)
+  File &quot;/usr/lib/python3.6/logging/__init__.py&quot;, line 577, in format
+    record.message = record.getMessage()
+  File &quot;/usr/lib/python3.6/logging/__init__.py&quot;, line 338, in getMessage
+    msg = msg % self.args
+TypeError: not all arguments converted during string formatting
+Call stack:
+  File &quot;/home/bridgeit/PycharmProjects/Pythonautomation/venv/bin/py.test&quot;, line 10, in &lt;module&gt;
+    sys.exit(main())
+  File &quot;/home/bridgeit/PycharmProjects/Pythonautomation/venv/lib/python3.6/site-packages/_pytest/config/__init__.py&quot;, line 93, in main
+    config=config
+  File &quot;/home/bridgeit/PycharmProjects/Pythonautomation/venv/lib/python3.6/site-packages/pluggy/hooks.py&quot;, line 286, in __call__
+    return self._hookexec(self, self.get_hookimpls(), kwargs)
+  File &quot;/home/bridgeit/PycharmProjects/Pythonautomation/venv/lib/python3.6/site-packages/pluggy/manager.py&quot;, line 93, in _hookexec
+    return self._inner_hookexec(hook, methods, kwargs)
+  File &quot;/home/bridgeit/PycharmProjects/Pythonautomation/venv/lib/python3.6/site-packages/pluggy/manager.py&quot;, line 87, in &lt;lambda&gt;
+    firstresult=hook.spec.opts.get(&quot;firstresult&quot;) if hook.spec else False,
+  File &quot;/home/bridgeit/PycharmProjects/Pythonautomation/venv/lib/python3.6/site-packages/pluggy/callers.py&quot;, line 187, in _multicall
+    res = hook_impl.function(*args)
+  File &quot;/home/bridgeit/PycharmProjects/Pythonautomation/venv/lib/python3.6/site-packages/_pytest/main.py&quot;, line 240, in pytest_cmdline_main
+    return wrap_session(config, _main)
+  File &quot;/home/bridgeit/PycharmProjects/Pythonautomation/venv/lib/python3.6/site-packages/_pytest/main.py&quot;, line 197, in wrap_session
+    session.exitstatus = doit(config, session) or 0
+  File &quot;/home/bridgeit/PycharmProjects/Pythonautomation/venv/lib/python3.6/site-packages/_pytest/main.py&quot;, line 247, in _main
+    config.hook.pytest_runtestloop(session=session)
+  File &quot;/home/bridgeit/PycharmProjects/Pythonautomation/venv/lib/python3.6/site-packages/pluggy/hooks.py&quot;, line 286, in __call__
+    return self._hookexec(self, self.get_hookimpls(), kwargs)
+  File &quot;/home/bridgeit/PycharmProjects/Pythonautomation/venv/lib/python3.6/site-packages/pluggy/manager.py&quot;, line 93, in _hookexec
+    return self._inner_hookexec(hook, methods, kwargs)
+  File &quot;/home/bridgeit/PycharmProjects/Pythonautomation/venv/lib/python3.6/site-packages/pluggy/manager.py&quot;, line 87, in &lt;lambda&gt;
+    firstresult=hook.spec.opts.get(&quot;firstresult&quot;) if hook.spec else False,
+  File &quot;/home/bridgeit/PycharmProjects/Pythonautomation/venv/lib/python3.6/site-packages/pluggy/callers.py&quot;, line 187, in _multicall
+    res = hook_impl.function(*args)
+  File &quot;/home/bridgeit/PycharmProjects/Pythonautomation/venv/lib/python3.6/site-packages/_pytest/main.py&quot;, line 271, in pytest_runtestloop
+    item.config.hook.pytest_runtest_protocol(item=item, nextitem=nextitem)
+  File &quot;/home/bridgeit/PycharmProjects/Pythonautomation/venv/lib/python3.6/site-packages/pluggy/hooks.py&quot;, line 286, in __call__
+    return self._hookexec(self, self.get_hookimpls(), kwargs)
+  File &quot;/home/bridgeit/PycharmProjects/Pythonautomation/venv/lib/python3.6/site-packages/pluggy/manager.py&quot;, line 93, in _hookexec
+    return self._inner_hookexec(hook, methods, kwargs)
+  File &quot;/home/bridgeit/PycharmProjects/Pythonautomation/venv/lib/python3.6/site-packages/pluggy/manager.py&quot;, line 87, in &lt;lambda&gt;
+    firstresult=hook.spec.opts.get(&quot;firstresult&quot;) if hook.spec else False,
+  File &quot;/home/bridgeit/PycharmProjects/Pythonautomation/venv/lib/python3.6/site-packages/pluggy/callers.py&quot;, line 187, in _multicall
+    res = hook_impl.function(*args)
+  File &quot;/home/bridgeit/PycharmProjects/Pythonautomation/venv/lib/python3.6/site-packages/_pytest/runner.py&quot;, line 84, in pytest_runtest_protocol
+    runtestprotocol(item, nextitem=nextitem)
+  File &quot;/home/bridgeit/PycharmProjects/Pythonautomation/venv/lib/python3.6/site-packages/_pytest/runner.py&quot;, line 99, in runtestprotocol
+    reports.append(call_and_report(item, &quot;call&quot;, log))
+  File &quot;/home/bridgeit/PycharmProjects/Pythonautomation/venv/lib/python3.6/site-packages/_pytest/runner.py&quot;, line 185, in call_and_report
+    call = call_runtest_hook(item, when, **kwds)
+  File &quot;/home/bridgeit/PycharmProjects/Pythonautomation/venv/lib/python3.6/site-packages/_pytest/runner.py&quot;, line 210, in call_runtest_hook
+    lambda: ihook(item=item, **kwds), when=when, reraise=reraise
+  File &quot;/home/bridgeit/PycharmProjects/Pythonautomation/venv/lib/python3.6/site-packages/_pytest/runner.py&quot;, line 237, in from_call
+    result = func()
+  File &quot;/home/bridgeit/PycharmProjects/Pythonautomation/venv/lib/python3.6/site-packages/_pytest/runner.py&quot;, line 210, in &lt;lambda&gt;
+    lambda: ihook(item=item, **kwds), when=when, reraise=reraise
+  File &quot;/home/bridgeit/PycharmProjects/Pythonautomation/venv/lib/python3.6/site-packages/pluggy/hooks.py&quot;, line 286, in __call__
+    return self._hookexec(self, self.get_hookimpls(), kwargs)
+  File &quot;/home/bridgeit/PycharmProjects/Pythonautomation/venv/lib/python3.6/site-packages/pluggy/manager.py&quot;, line 93, in _hookexec
+    return self._inner_hookexec(hook, methods, kwargs)
+  File &quot;/home/bridgeit/PycharmProjects/Pythonautomation/venv/lib/python3.6/site-packages/pluggy/manager.py&quot;, line 87, in &lt;lambda&gt;
+    firstresult=hook.spec.opts.get(&quot;firstresult&quot;) if hook.spec else False,
+  File &quot;/home/bridgeit/PycharmProjects/Pythonautomation/venv/lib/python3.6/site-packages/pluggy/callers.py&quot;, line 187, in _multicall
+    res = hook_impl.function(*args)
+  File &quot;/home/bridgeit/PycharmProjects/Pythonautomation/venv/lib/python3.6/site-packages/_pytest/runner.py&quot;, line 134, in pytest_runtest_call
+    item.runtest()
+  File &quot;/home/bridgeit/PycharmProjects/Pythonautomation/venv/lib/python3.6/site-packages/_pytest/python.py&quot;, line 1445, in runtest
+    self.ihook.pytest_pyfunc_call(pyfuncitem=self)
+  File &quot;/home/bridgeit/PycharmProjects/Pythonautomation/venv/lib/python3.6/site-packages/pluggy/hooks.py&quot;, line 286, in __call__
+    return self._hookexec(self, self.get_hookimpls(), kwargs)
+  File &quot;/home/bridgeit/PycharmProjects/Pythonautomation/venv/lib/python3.6/site-packages/pluggy/manager.py&quot;, line 93, in _hookexec
+    return self._inner_hookexec(hook, methods, kwargs)
+  File &quot;/home/bridgeit/PycharmProjects/Pythonautomation/venv/lib/python3.6/site-packages/pluggy/manager.py&quot;, line 87, in &lt;lambda&gt;
+    firstresult=hook.spec.opts.get(&quot;firstresult&quot;) if hook.spec else False,
+  File &quot;/home/bridgeit/PycharmProjects/Pythonautomation/venv/lib/python3.6/site-packages/pluggy/callers.py&quot;, line 187, in _multicall
+    res = hook_impl.function(*args)
+  File &quot;/home/bridgeit/PycharmProjects/Pythonautomation/venv/lib/python3.6/site-packages/_pytest/python.py&quot;, line 167, in pytest_pyfunc_call
+    result = testfunction(**testargs)
+  File &quot;/home/bridgeit/PycharmProjects/Pythonautomation/tests/test_homepage.py&quot;, line 18, in test_formSubmission
+    log.info(&quot;this is the first name&quot;,getData[&quot;firstname&quot;])
+Message: &#x27;this is the first name&#x27;
+Arguments: (&#x27;hjh&#x27;,)
+--- Logging error ---
+Traceback (most recent call last):
+  File &quot;/usr/lib/python3.6/logging/__init__.py&quot;, line 994, in emit
+    msg = self.format(record)
+  File &quot;/usr/lib/python3.6/logging/__init__.py&quot;, line 840, in format
+    return fmt.format(record)
+  File &quot;/home/bridgeit/PycharmProjects/Pythonautomation/venv/lib/python3.6/site-packages/_pytest/logging.py&quot;, line 70, in format
+    return super().format(record)
+  File &quot;/usr/lib/python3.6/logging/__init__.py&quot;, line 577, in format
+    record.message = record.getMessage()
+  File &quot;/usr/lib/python3.6/logging/__init__.py&quot;, line 338, in getMessage
+    msg = msg % self.args
+TypeError: not all arguments converted during string formatting
+Call stack:
+  File &quot;/home/bridgeit/PycharmProjects/Pythonautomation/venv/bin/py.test&quot;, line 10, in &lt;module&gt;
+    sys.exit(main())
+  File &quot;/home/bridgeit/PycharmProjects/Pythonautomation/venv/lib/python3.6/site-packages/_pytest/config/__init__.py&quot;, line 93, in main
+    config=config
+  File &quot;/home/bridgeit/PycharmProjects/Pythonautomation/venv/lib/python3.6/site-packages/pluggy/hooks.py&quot;, line 286, in __call__
+    return self._hookexec(self, self.get_hookimpls(), kwargs)
+  File &quot;/home/bridgeit/PycharmProjects/Pythonautomation/venv/lib/python3.6/site-packages/pluggy/manager.py&quot;, line 93, in _hookexec
+    return self._inner_hookexec(hook, methods, kwargs)
+  File &quot;/home/bridgeit/PycharmProjects/Pythonautomation/venv/lib/python3.6/site-packages/pluggy/manager.py&quot;, line 87, in &lt;lambda&gt;
+    firstresult=hook.spec.opts.get(&quot;firstresult&quot;) if hook.spec else False,
+  File &quot;/home/bridgeit/PycharmProjects/Pythonautomation/venv/lib/python3.6/site-packages/pluggy/callers.py&quot;, line 187, in _multicall
+    res = hook_impl.function(*args)
+  File &quot;/home/bridgeit/PycharmProjects/Pythonautomation/venv/lib/python3.6/site-packages/_pytest/main.py&quot;, line 240, in pytest_cmdline_main
+    return wrap_session(config, _main)
+  File &quot;/home/bridgeit/PycharmProjects/Pythonautomation/venv/lib/python3.6/site-packages/_pytest/main.py&quot;, line 197, in wrap_session
+    session.exitstatus = doit(config, session) or 0
+  File &quot;/home/bridgeit/PycharmProjects/Pythonautomation/venv/lib/python3.6/site-packages/_pytest/main.py&quot;, line 247, in _main
+    config.hook.pytest_runtestloop(session=session)
+  File &quot;/home/bridgeit/PycharmProjects/Pythonautomation/venv/lib/python3.6/site-packages/pluggy/hooks.py&quot;, line 286, in __call__
+    return self._hookexec(self, self.get_hookimpls(), kwargs)
+  File &quot;/home/bridgeit/PycharmProjects/Pythonautomation/venv/lib/python3.6/site-packages/pluggy/manager.py&quot;, line 93, in _hookexec
+    return self._inner_hookexec(hook, methods, kwargs)
+  File &quot;/home/bridgeit/PycharmProjects/Pythonautomation/venv/lib/python3.6/site-packages/pluggy/manager.py&quot;, line 87, in &lt;lambda&gt;
+    firstresult=hook.spec.opts.get(&quot;firstresult&quot;) if hook.spec else False,
+  File &quot;/home/bridgeit/PycharmProjects/Pythonautomation/venv/lib/python3.6/site-packages/pluggy/callers.py&quot;, line 187, in _multicall
+    res = hook_impl.function(*args)
+  File &quot;/home/bridgeit/PycharmProjects/Pythonautomation/venv/lib/python3.6/site-packages/_pytest/main.py&quot;, line 271, in pytest_runtestloop
+    item.config.hook.pytest_runtest_protocol(item=item, nextitem=nextitem)
+  File &quot;/home/bridgeit/PycharmProjects/Pythonautomation/venv/lib/python3.6/site-packages/pluggy/hooks.py&quot;, line 286, in __call__
+    return self._hookexec(self, self.get_hookimpls(), kwargs)
+  File &quot;/home/bridgeit/PycharmProjects/Pythonautomation/venv/lib/python3.6/site-packages/pluggy/manager.py&quot;, line 93, in _hookexec
+    return self._inner_hookexec(hook, methods, kwargs)
+  File &quot;/home/bridgeit/PycharmProjects/Pythonautomation/venv/lib/python3.6/site-packages/pluggy/manager.py&quot;, line 87, in &lt;lambda&gt;
+    firstresult=hook.spec.opts.get(&quot;firstresult&quot;) if hook.spec else False,
+  File &quot;/home/bridgeit/PycharmProjects/Pythonautomation/venv/lib/python3.6/site-packages/pluggy/callers.py&quot;, line 187, in _multicall
+    res = hook_impl.function(*args)
+  File &quot;/home/bridgeit/PycharmProjects/Pythonautomation/venv/lib/python3.6/site-packages/_pytest/runner.py&quot;, line 84, in pytest_runtest_protocol
+    runtestprotocol(item, nextitem=nextitem)
+  File &quot;/home/bridgeit/PycharmProjects/Pythonautomation/venv/lib/python3.6/site-packages/_pytest/runner.py&quot;, line 99, in runtestprotocol
+    reports.append(call_and_report(item, &quot;call&quot;, log))
+  File &quot;/home/bridgeit/PycharmProjects/Pythonautomation/venv/lib/python3.6/site-packages/_pytest/runner.py&quot;, line 185, in call_and_report
+    call = call_runtest_hook(item, when, **kwds)
+  File &quot;/home/bridgeit/PycharmProjects/Pythonautomation/venv/lib/python3.6/site-packages/_pytest/runner.py&quot;, line 210, in call_runtest_hook
+    lambda: ihook(item=item, **kwds), when=when, reraise=reraise
+  File &quot;/home/bridgeit/PycharmProjects/Pythonautomation/venv/lib/python3.6/site-packages/_pytest/runner.py&quot;, line 237, in from_call
+    result = func()
+  File &quot;/home/bridgeit/PycharmProjects/Pythonautomation/venv/lib/python3.6/site-packages/_pytest/runner.py&quot;, line 210, in &lt;lambda&gt;
+    lambda: ihook(item=item, **kwds), when=when, reraise=reraise
+  File &quot;/home/bridgeit/PycharmProjects/Pythonautomation/venv/lib/python3.6/site-packages/pluggy/hooks.py&quot;, line 286, in __call__
+    return self._hookexec(self, self.get_hookimpls(), kwargs)
+  File &quot;/home/bridgeit/PycharmProjects/Pythonautomation/venv/lib/python3.6/site-packages/pluggy/manager.py&quot;, line 93, in _hookexec
+    return self._inner_hookexec(hook, methods, kwargs)
+  File &quot;/home/bridgeit/PycharmProjects/Pythonautomation/venv/lib/python3.6/site-packages/pluggy/manager.py&quot;, line 87, in &lt;lambda&gt;
+    firstresult=hook.spec.opts.get(&quot;firstresult&quot;) if hook.spec else False,
+  File &quot;/home/bridgeit/PycharmProjects/Pythonautomation/venv/lib/python3.6/site-packages/pluggy/callers.py&quot;, line 187, in _multicall
+    res = hook_impl.function(*args)
+  File &quot;/home/bridgeit/PycharmProjects/Pythonautomation/venv/lib/python3.6/site-packages/_pytest/runner.py&quot;, line 134, in pytest_runtest_call
+    item.runtest()
+  File &quot;/home/bridgeit/PycharmProjects/Pythonautomation/venv/lib/python3.6/site-packages/_pytest/python.py&quot;, line 1445, in runtest
+    self.ihook.pytest_pyfunc_call(pyfuncitem=self)
+  File &quot;/home/bridgeit/PycharmProjects/Pythonautomation/venv/lib/python3.6/site-packages/pluggy/hooks.py&quot;, line 286, in __call__
+    return self._hookexec(self, self.get_hookimpls(), kwargs)
+  File &quot;/home/bridgeit/PycharmProjects/Pythonautomation/venv/lib/python3.6/site-packages/pluggy/manager.py&quot;, line 93, in _hookexec
+    return self._inner_hookexec(hook, methods, kwargs)
+  File &quot;/home/bridgeit/PycharmProjects/Pythonautomation/venv/lib/python3.6/site-packages/pluggy/manager.py&quot;, line 87, in &lt;lambda&gt;
+    firstresult=hook.spec.opts.get(&quot;firstresult&quot;) if hook.spec else False,
+  File &quot;/home/bridgeit/PycharmProjects/Pythonautomation/venv/lib/python3.6/site-packages/pluggy/callers.py&quot;, line 187, in _multicall
+    res = hook_impl.function(*args)
+  File &quot;/home/bridgeit/PycharmProjects/Pythonautomation/venv/lib/python3.6/site-packages/_pytest/python.py&quot;, line 167, in pytest_pyfunc_call
+    result = testfunction(**testargs)
+  File &quot;/home/bridgeit/PycharmProjects/Pythonautomation/tests/test_homepage.py&quot;, line 18, in test_formSubmission
+    log.info(&quot;this is the first name&quot;,getData[&quot;firstname&quot;])
+  File &quot;/usr/lib/python3.6/logging/__init__.py&quot;, line 1308, in info
+    self._log(INFO, msg, args, **kwargs)
+  File &quot;/usr/lib/python3.6/logging/__init__.py&quot;, line 1444, in _log
+    self.handle(record)
+  File &quot;/usr/lib/python3.6/logging/__init__.py&quot;, line 1454, in handle
+    self.callHandlers(record)
+  File &quot;/usr/lib/python3.6/logging/__init__.py&quot;, line 1516, in callHandlers
+    hdlr.handle(record)
+  File &quot;/usr/lib/python3.6/logging/__init__.py&quot;, line 865, in handle
+    self.emit(record)
+  File &quot;/home/bridgeit/PycharmProjects/Pythonautomation/venv/lib/python3.6/site-packages/_pytest/logging.py&quot;, line 301, in emit
+    logging.StreamHandler.emit(self, record)
+Message: &#x27;this is the first name&#x27;
+Arguments: (&#x27;hjh&#x27;,)
+<br/></div></td></tr></tbody>
+      <tbody class="passed results-table-row">
+        <tr>
+          <td class="col-result">Passed</td>
+          <td class="col-name">test_e2e.py::TestOne::test_e2e</td>
+          <td class="col-duration">8.84</td>
+          <td class="col-links"></td></tr>
+        <tr>
+          <td class="extra" colspan="4">
+            <div class="log"> ------------------------------Captured stdout call------------------------------ <br/>×
+Success! Thank you! Your order will be delivered in next few weeks :-).
+<br/> ------------------------------Captured stderr call------------------------------ <br/>--- Logging error ---
+Traceback (most recent call last):
+  File &quot;/usr/lib/python3.6/logging/__init__.py&quot;, line 994, in emit
+    msg = self.format(record)
+  File &quot;/usr/lib/python3.6/logging/__init__.py&quot;, line 840, in format
+    return fmt.format(record)
+  File &quot;/usr/lib/python3.6/logging/__init__.py&quot;, line 577, in format
+    record.message = record.getMessage()
+  File &quot;/usr/lib/python3.6/logging/__init__.py&quot;, line 338, in getMessage
+    msg = msg % self.args
+TypeError: not all arguments converted during string formatting
+Call stack:
+  File &quot;/home/bridgeit/PycharmProjects/Pythonautomation/venv/bin/py.test&quot;, line 10, in &lt;module&gt;
+    sys.exit(main())
+  File &quot;/home/bridgeit/PycharmProjects/Pythonautomation/venv/lib/python3.6/site-packages/_pytest/config/__init__.py&quot;, line 93, in main
+    config=config
+  File &quot;/home/bridgeit/PycharmProjects/Pythonautomation/venv/lib/python3.6/site-packages/pluggy/hooks.py&quot;, line 286, in __call__
+    return self._hookexec(self, self.get_hookimpls(), kwargs)
+  File &quot;/home/bridgeit/PycharmProjects/Pythonautomation/venv/lib/python3.6/site-packages/pluggy/manager.py&quot;, line 93, in _hookexec
+    return self._inner_hookexec(hook, methods, kwargs)
+  File &quot;/home/bridgeit/PycharmProjects/Pythonautomation/venv/lib/python3.6/site-packages/pluggy/manager.py&quot;, line 87, in &lt;lambda&gt;
+    firstresult=hook.spec.opts.get(&quot;firstresult&quot;) if hook.spec else False,
+  File &quot;/home/bridgeit/PycharmProjects/Pythonautomation/venv/lib/python3.6/site-packages/pluggy/callers.py&quot;, line 187, in _multicall
+    res = hook_impl.function(*args)
+  File &quot;/home/bridgeit/PycharmProjects/Pythonautomation/venv/lib/python3.6/site-packages/_pytest/main.py&quot;, line 240, in pytest_cmdline_main
+    return wrap_session(config, _main)
+  File &quot;/home/bridgeit/PycharmProjects/Pythonautomation/venv/lib/python3.6/site-packages/_pytest/main.py&quot;, line 197, in wrap_session
+    session.exitstatus = doit(config, session) or 0
+  File &quot;/home/bridgeit/PycharmProjects/Pythonautomation/venv/lib/python3.6/site-packages/_pytest/main.py&quot;, line 247, in _main
+    config.hook.pytest_runtestloop(session=session)
+  File &quot;/home/bridgeit/PycharmProjects/Pythonautomation/venv/lib/python3.6/site-packages/pluggy/hooks.py&quot;, line 286, in __call__
+    return self._hookexec(self, self.get_hookimpls(), kwargs)
+  File &quot;/home/bridgeit/PycharmProjects/Pythonautomation/venv/lib/python3.6/site-packages/pluggy/manager.py&quot;, line 93, in _hookexec
+    return self._inner_hookexec(hook, methods, kwargs)
+  File &quot;/home/bridgeit/PycharmProjects/Pythonautomation/venv/lib/python3.6/site-packages/pluggy/manager.py&quot;, line 87, in &lt;lambda&gt;
+    firstresult=hook.spec.opts.get(&quot;firstresult&quot;) if hook.spec else False,
+  File &quot;/home/bridgeit/PycharmProjects/Pythonautomation/venv/lib/python3.6/site-packages/pluggy/callers.py&quot;, line 187, in _multicall
+    res = hook_impl.function(*args)
+  File &quot;/home/bridgeit/PycharmProjects/Pythonautomation/venv/lib/python3.6/site-packages/_pytest/main.py&quot;, line 271, in pytest_runtestloop
+    item.config.hook.pytest_runtest_protocol(item=item, nextitem=nextitem)
+  File &quot;/home/bridgeit/PycharmProjects/Pythonautomation/venv/lib/python3.6/site-packages/pluggy/hooks.py&quot;, line 286, in __call__
+    return self._hookexec(self, self.get_hookimpls(), kwargs)
+  File &quot;/home/bridgeit/PycharmProjects/Pythonautomation/venv/lib/python3.6/site-packages/pluggy/manager.py&quot;, line 93, in _hookexec
+    return self._inner_hookexec(hook, methods, kwargs)
+  File &quot;/home/bridgeit/PycharmProjects/Pythonautomation/venv/lib/python3.6/site-packages/pluggy/manager.py&quot;, line 87, in &lt;lambda&gt;
+    firstresult=hook.spec.opts.get(&quot;firstresult&quot;) if hook.spec else False,
+  File &quot;/home/bridgeit/PycharmProjects/Pythonautomation/venv/lib/python3.6/site-packages/pluggy/callers.py&quot;, line 187, in _multicall
+    res = hook_impl.function(*args)
+  File &quot;/home/bridgeit/PycharmProjects/Pythonautomation/venv/lib/python3.6/site-packages/_pytest/runner.py&quot;, line 84, in pytest_runtest_protocol
+    runtestprotocol(item, nextitem=nextitem)
+  File &quot;/home/bridgeit/PycharmProjects/Pythonautomation/venv/lib/python3.6/site-packages/_pytest/runner.py&quot;, line 99, in runtestprotocol
+    reports.append(call_and_report(item, &quot;call&quot;, log))
+  File &quot;/home/bridgeit/PycharmProjects/Pythonautomation/venv/lib/python3.6/site-packages/_pytest/runner.py&quot;, line 185, in call_and_report
+    call = call_runtest_hook(item, when, **kwds)
+  File &quot;/home/bridgeit/PycharmProjects/Pythonautomation/venv/lib/python3.6/site-packages/_pytest/runner.py&quot;, line 210, in call_runtest_hook
+    lambda: ihook(item=item, **kwds), when=when, reraise=reraise
+  File &quot;/home/bridgeit/PycharmProjects/Pythonautomation/venv/lib/python3.6/site-packages/_pytest/runner.py&quot;, line 237, in from_call
+    result = func()
+  File &quot;/home/bridgeit/PycharmProjects/Pythonautomation/venv/lib/python3.6/site-packages/_pytest/runner.py&quot;, line 210, in &lt;lambda&gt;
+    lambda: ihook(item=item, **kwds), when=when, reraise=reraise
+  File &quot;/home/bridgeit/PycharmProjects/Pythonautomation/venv/lib/python3.6/site-packages/pluggy/hooks.py&quot;, line 286, in __call__
+    return self._hookexec(self, self.get_hookimpls(), kwargs)
+  File &quot;/home/bridgeit/PycharmProjects/Pythonautomation/venv/lib/python3.6/site-packages/pluggy/manager.py&quot;, line 93, in _hookexec
+    return self._inner_hookexec(hook, methods, kwargs)
+  File &quot;/home/bridgeit/PycharmProjects/Pythonautomation/venv/lib/python3.6/site-packages/pluggy/manager.py&quot;, line 87, in &lt;lambda&gt;
+    firstresult=hook.spec.opts.get(&quot;firstresult&quot;) if hook.spec else False,
+  File &quot;/home/bridgeit/PycharmProjects/Pythonautomation/venv/lib/python3.6/site-packages/pluggy/callers.py&quot;, line 187, in _multicall
+    res = hook_impl.function(*args)
+  File &quot;/home/bridgeit/PycharmProjects/Pythonautomation/venv/lib/python3.6/site-packages/_pytest/runner.py&quot;, line 134, in pytest_runtest_call
+    item.runtest()
+  File &quot;/home/bridgeit/PycharmProjects/Pythonautomation/venv/lib/python3.6/site-packages/_pytest/python.py&quot;, line 1445, in runtest
+    self.ihook.pytest_pyfunc_call(pyfuncitem=self)
+  File &quot;/home/bridgeit/PycharmProjects/Pythonautomation/venv/lib/python3.6/site-packages/pluggy/hooks.py&quot;, line 286, in __call__
+    return self._hookexec(self, self.get_hookimpls(), kwargs)
+  File &quot;/home/bridgeit/PycharmProjects/Pythonautomation/venv/lib/python3.6/site-packages/pluggy/manager.py&quot;, line 93, in _hookexec
+    return self._inner_hookexec(hook, methods, kwargs)
+  File &quot;/home/bridgeit/PycharmProjects/Pythonautomation/venv/lib/python3.6/site-packages/pluggy/manager.py&quot;, line 87, in &lt;lambda&gt;
+    firstresult=hook.spec.opts.get(&quot;firstresult&quot;) if hook.spec else False,
+  File &quot;/home/bridgeit/PycharmProjects/Pythonautomation/venv/lib/python3.6/site-packages/pluggy/callers.py&quot;, line 187, in _multicall
+    res = hook_impl.function(*args)
+  File &quot;/home/bridgeit/PycharmProjects/Pythonautomation/venv/lib/python3.6/site-packages/_pytest/python.py&quot;, line 167, in pytest_pyfunc_call
+    result = testfunction(**testargs)
+  File &quot;/home/bridgeit/PycharmProjects/Pythonautomation/tests/test_e2e.py&quot;, line 18, in test_e2e
+    log.info(checkoutpage,&quot;some&quot;)
+Message: &lt;page_objects.checkout_page.CheckoutPage object at 0x7f8865db2748&gt;
+Arguments: (&#x27;some&#x27;,)
+--- Logging error ---
+Traceback (most recent call last):
+  File &quot;/usr/lib/python3.6/logging/__init__.py&quot;, line 994, in emit
+    msg = self.format(record)
+  File &quot;/usr/lib/python3.6/logging/__init__.py&quot;, line 840, in format
+    return fmt.format(record)
+  File &quot;/home/bridgeit/PycharmProjects/Pythonautomation/venv/lib/python3.6/site-packages/_pytest/logging.py&quot;, line 70, in format
+    return super().format(record)
+  File &quot;/usr/lib/python3.6/logging/__init__.py&quot;, line 577, in format
+    record.message = record.getMessage()
+  File &quot;/usr/lib/python3.6/logging/__init__.py&quot;, line 338, in getMessage
+    msg = msg % self.args
+TypeError: not all arguments converted during string formatting
+Call stack:
+  File &quot;/home/bridgeit/PycharmProjects/Pythonautomation/venv/bin/py.test&quot;, line 10, in &lt;module&gt;
+    sys.exit(main())
+  File &quot;/home/bridgeit/PycharmProjects/Pythonautomation/venv/lib/python3.6/site-packages/_pytest/config/__init__.py&quot;, line 93, in main
+    config=config
+  File &quot;/home/bridgeit/PycharmProjects/Pythonautomation/venv/lib/python3.6/site-packages/pluggy/hooks.py&quot;, line 286, in __call__
+    return self._hookexec(self, self.get_hookimpls(), kwargs)
+  File &quot;/home/bridgeit/PycharmProjects/Pythonautomation/venv/lib/python3.6/site-packages/pluggy/manager.py&quot;, line 93, in _hookexec
+    return self._inner_hookexec(hook, methods, kwargs)
+  File &quot;/home/bridgeit/PycharmProjects/Pythonautomation/venv/lib/python3.6/site-packages/pluggy/manager.py&quot;, line 87, in &lt;lambda&gt;
+    firstresult=hook.spec.opts.get(&quot;firstresult&quot;) if hook.spec else False,
+  File &quot;/home/bridgeit/PycharmProjects/Pythonautomation/venv/lib/python3.6/site-packages/pluggy/callers.py&quot;, line 187, in _multicall
+    res = hook_impl.function(*args)
+  File &quot;/home/bridgeit/PycharmProjects/Pythonautomation/venv/lib/python3.6/site-packages/_pytest/main.py&quot;, line 240, in pytest_cmdline_main
+    return wrap_session(config, _main)
+  File &quot;/home/bridgeit/PycharmProjects/Pythonautomation/venv/lib/python3.6/site-packages/_pytest/main.py&quot;, line 197, in wrap_session
+    session.exitstatus = doit(config, session) or 0
+  File &quot;/home/bridgeit/PycharmProjects/Pythonautomation/venv/lib/python3.6/site-packages/_pytest/main.py&quot;, line 247, in _main
+    config.hook.pytest_runtestloop(session=session)
+  File &quot;/home/bridgeit/PycharmProjects/Pythonautomation/venv/lib/python3.6/site-packages/pluggy/hooks.py&quot;, line 286, in __call__
+    return self._hookexec(self, self.get_hookimpls(), kwargs)
+  File &quot;/home/bridgeit/PycharmProjects/Pythonautomation/venv/lib/python3.6/site-packages/pluggy/manager.py&quot;, line 93, in _hookexec
+    return self._inner_hookexec(hook, methods, kwargs)
+  File &quot;/home/bridgeit/PycharmProjects/Pythonautomation/venv/lib/python3.6/site-packages/pluggy/manager.py&quot;, line 87, in &lt;lambda&gt;
+    firstresult=hook.spec.opts.get(&quot;firstresult&quot;) if hook.spec else False,
+  File &quot;/home/bridgeit/PycharmProjects/Pythonautomation/venv/lib/python3.6/site-packages/pluggy/callers.py&quot;, line 187, in _multicall
+    res = hook_impl.function(*args)
+  File &quot;/home/bridgeit/PycharmProjects/Pythonautomation/venv/lib/python3.6/site-packages/_pytest/main.py&quot;, line 271, in pytest_runtestloop
+    item.config.hook.pytest_runtest_protocol(item=item, nextitem=nextitem)
+  File &quot;/home/bridgeit/PycharmProjects/Pythonautomation/venv/lib/python3.6/site-packages/pluggy/hooks.py&quot;, line 286, in __call__
+    return self._hookexec(self, self.get_hookimpls(), kwargs)
+  File &quot;/home/bridgeit/PycharmProjects/Pythonautomation/venv/lib/python3.6/site-packages/pluggy/manager.py&quot;, line 93, in _hookexec
+    return self._inner_hookexec(hook, methods, kwargs)
+  File &quot;/home/bridgeit/PycharmProjects/Pythonautomation/venv/lib/python3.6/site-packages/pluggy/manager.py&quot;, line 87, in &lt;lambda&gt;
+    firstresult=hook.spec.opts.get(&quot;firstresult&quot;) if hook.spec else False,
+  File &quot;/home/bridgeit/PycharmProjects/Pythonautomation/venv/lib/python3.6/site-packages/pluggy/callers.py&quot;, line 187, in _multicall
+    res = hook_impl.function(*args)
+  File &quot;/home/bridgeit/PycharmProjects/Pythonautomation/venv/lib/python3.6/site-packages/_pytest/runner.py&quot;, line 84, in pytest_runtest_protocol
+    runtestprotocol(item, nextitem=nextitem)
+  File &quot;/home/bridgeit/PycharmProjects/Pythonautomation/venv/lib/python3.6/site-packages/_pytest/runner.py&quot;, line 99, in runtestprotocol
+    reports.append(call_and_report(item, &quot;call&quot;, log))
+  File &quot;/home/bridgeit/PycharmProjects/Pythonautomation/venv/lib/python3.6/site-packages/_pytest/runner.py&quot;, line 185, in call_and_report
+    call = call_runtest_hook(item, when, **kwds)
+  File &quot;/home/bridgeit/PycharmProjects/Pythonautomation/venv/lib/python3.6/site-packages/_pytest/runner.py&quot;, line 210, in call_runtest_hook
+    lambda: ihook(item=item, **kwds), when=when, reraise=reraise
+  File &quot;/home/bridgeit/PycharmProjects/Pythonautomation/venv/lib/python3.6/site-packages/_pytest/runner.py&quot;, line 237, in from_call
+    result = func()
+  File &quot;/home/bridgeit/PycharmProjects/Pythonautomation/venv/lib/python3.6/site-packages/_pytest/runner.py&quot;, line 210, in &lt;lambda&gt;
+    lambda: ihook(item=item, **kwds), when=when, reraise=reraise
+  File &quot;/home/bridgeit/PycharmProjects/Pythonautomation/venv/lib/python3.6/site-packages/pluggy/hooks.py&quot;, line 286, in __call__
+    return self._hookexec(self, self.get_hookimpls(), kwargs)
+  File &quot;/home/bridgeit/PycharmProjects/Pythonautomation/venv/lib/python3.6/site-packages/pluggy/manager.py&quot;, line 93, in _hookexec
+    return self._inner_hookexec(hook, methods, kwargs)
+  File &quot;/home/bridgeit/PycharmProjects/Pythonautomation/venv/lib/python3.6/site-packages/pluggy/manager.py&quot;, line 87, in &lt;lambda&gt;
+    firstresult=hook.spec.opts.get(&quot;firstresult&quot;) if hook.spec else False,
+  File &quot;/home/bridgeit/PycharmProjects/Pythonautomation/venv/lib/python3.6/site-packages/pluggy/callers.py&quot;, line 187, in _multicall
+    res = hook_impl.function(*args)
+  File &quot;/home/bridgeit/PycharmProjects/Pythonautomation/venv/lib/python3.6/site-packages/_pytest/runner.py&quot;, line 134, in pytest_runtest_call
+    item.runtest()
+  File &quot;/home/bridgeit/PycharmProjects/Pythonautomation/venv/lib/python3.6/site-packages/_pytest/python.py&quot;, line 1445, in runtest
+    self.ihook.pytest_pyfunc_call(pyfuncitem=self)
+  File &quot;/home/bridgeit/PycharmProjects/Pythonautomation/venv/lib/python3.6/site-packages/pluggy/hooks.py&quot;, line 286, in __call__
+    return self._hookexec(self, self.get_hookimpls(), kwargs)
+  File &quot;/home/bridgeit/PycharmProjects/Pythonautomation/venv/lib/python3.6/site-packages/pluggy/manager.py&quot;, line 93, in _hookexec
+    return self._inner_hookexec(hook, methods, kwargs)
+  File &quot;/home/bridgeit/PycharmProjects/Pythonautomation/venv/lib/python3.6/site-packages/pluggy/manager.py&quot;, line 87, in &lt;lambda&gt;
+    firstresult=hook.spec.opts.get(&quot;firstresult&quot;) if hook.spec else False,
+  File &quot;/home/bridgeit/PycharmProjects/Pythonautomation/venv/lib/python3.6/site-packages/pluggy/callers.py&quot;, line 187, in _multicall
+    res = hook_impl.function(*args)
+  File &quot;/home/bridgeit/PycharmProjects/Pythonautomation/venv/lib/python3.6/site-packages/_pytest/python.py&quot;, line 167, in pytest_pyfunc_call
+    result = testfunction(**testargs)
+  File &quot;/home/bridgeit/PycharmProjects/Pythonautomation/tests/test_e2e.py&quot;, line 18, in test_e2e
+    log.info(checkoutpage,&quot;some&quot;)
+  File &quot;/usr/lib/python3.6/logging/__init__.py&quot;, line 1308, in info
+    self._log(INFO, msg, args, **kwargs)
+  File &quot;/usr/lib/python3.6/logging/__init__.py&quot;, line 1444, in _log
+    self.handle(record)
+  File &quot;/usr/lib/python3.6/logging/__init__.py&quot;, line 1454, in handle
+    self.callHandlers(record)
+  File &quot;/usr/lib/python3.6/logging/__init__.py&quot;, line 1516, in callHandlers
+    hdlr.handle(record)
+  File &quot;/usr/lib/python3.6/logging/__init__.py&quot;, line 865, in handle
+    self.emit(record)
+  File &quot;/home/bridgeit/PycharmProjects/Pythonautomation/venv/lib/python3.6/site-packages/_pytest/logging.py&quot;, line 301, in emit
+    logging.StreamHandler.emit(self, record)
+Message: &lt;page_objects.checkout_page.CheckoutPage object at 0x7f8865db2748&gt;
+Arguments: (&#x27;some&#x27;,)
+--- Logging error ---
+Traceback (most recent call last):
+  File &quot;/usr/lib/python3.6/logging/__init__.py&quot;, line 994, in emit
+    msg = self.format(record)
+  File &quot;/usr/lib/python3.6/logging/__init__.py&quot;, line 840, in format
+    return fmt.format(record)
+  File &quot;/usr/lib/python3.6/logging/__init__.py&quot;, line 577, in format
+    record.message = record.getMessage()
+  File &quot;/usr/lib/python3.6/logging/__init__.py&quot;, line 338, in getMessage
+    msg = msg % self.args
+TypeError: not all arguments converted during string formatting
+Call stack:
+  File &quot;/home/bridgeit/PycharmProjects/Pythonautomation/venv/bin/py.test&quot;, line 10, in &lt;module&gt;
+    sys.exit(main())
+  File &quot;/home/bridgeit/PycharmProjects/Pythonautomation/venv/lib/python3.6/site-packages/_pytest/config/__init__.py&quot;, line 93, in main
+    config=config
+  File &quot;/home/bridgeit/PycharmProjects/Pythonautomation/venv/lib/python3.6/site-packages/pluggy/hooks.py&quot;, line 286, in __call__
+    return self._hookexec(self, self.get_hookimpls(), kwargs)
+  File &quot;/home/bridgeit/PycharmProjects/Pythonautomation/venv/lib/python3.6/site-packages/pluggy/manager.py&quot;, line 93, in _hookexec
+    return self._inner_hookexec(hook, methods, kwargs)
+  File &quot;/home/bridgeit/PycharmProjects/Pythonautomation/venv/lib/python3.6/site-packages/pluggy/manager.py&quot;, line 87, in &lt;lambda&gt;
+    firstresult=hook.spec.opts.get(&quot;firstresult&quot;) if hook.spec else False,
+  File &quot;/home/bridgeit/PycharmProjects/Pythonautomation/venv/lib/python3.6/site-packages/pluggy/callers.py&quot;, line 187, in _multicall
+    res = hook_impl.function(*args)
+  File &quot;/home/bridgeit/PycharmProjects/Pythonautomation/venv/lib/python3.6/site-packages/_pytest/main.py&quot;, line 240, in pytest_cmdline_main
+    return wrap_session(config, _main)
+  File &quot;/home/bridgeit/PycharmProjects/Pythonautomation/venv/lib/python3.6/site-packages/_pytest/main.py&quot;, line 197, in wrap_session
+    session.exitstatus = doit(config, session) or 0
+  File &quot;/home/bridgeit/PycharmProjects/Pythonautomation/venv/lib/python3.6/site-packages/_pytest/main.py&quot;, line 247, in _main
+    config.hook.pytest_runtestloop(session=session)
+  File &quot;/home/bridgeit/PycharmProjects/Pythonautomation/venv/lib/python3.6/site-packages/pluggy/hooks.py&quot;, line 286, in __call__
+    return self._hookexec(self, self.get_hookimpls(), kwargs)
+  File &quot;/home/bridgeit/PycharmProjects/Pythonautomation/venv/lib/python3.6/site-packages/pluggy/manager.py&quot;, line 93, in _hookexec
+    return self._inner_hookexec(hook, methods, kwargs)
+  File &quot;/home/bridgeit/PycharmProjects/Pythonautomation/venv/lib/python3.6/site-packages/pluggy/manager.py&quot;, line 87, in &lt;lambda&gt;
+    firstresult=hook.spec.opts.get(&quot;firstresult&quot;) if hook.spec else False,
+  File &quot;/home/bridgeit/PycharmProjects/Pythonautomation/venv/lib/python3.6/site-packages/pluggy/callers.py&quot;, line 187, in _multicall
+    res = hook_impl.function(*args)
+  File &quot;/home/bridgeit/PycharmProjects/Pythonautomation/venv/lib/python3.6/site-packages/_pytest/main.py&quot;, line 271, in pytest_runtestloop
+    item.config.hook.pytest_runtest_protocol(item=item, nextitem=nextitem)
+  File &quot;/home/bridgeit/PycharmProjects/Pythonautomation/venv/lib/python3.6/site-packages/pluggy/hooks.py&quot;, line 286, in __call__
+    return self._hookexec(self, self.get_hookimpls(), kwargs)
+  File &quot;/home/bridgeit/PycharmProjects/Pythonautomation/venv/lib/python3.6/site-packages/pluggy/manager.py&quot;, line 93, in _hookexec
+    return self._inner_hookexec(hook, methods, kwargs)
+  File &quot;/home/bridgeit/PycharmProjects/Pythonautomation/venv/lib/python3.6/site-packages/pluggy/manager.py&quot;, line 87, in &lt;lambda&gt;
+    firstresult=hook.spec.opts.get(&quot;firstresult&quot;) if hook.spec else False,
+  File &quot;/home/bridgeit/PycharmProjects/Pythonautomation/venv/lib/python3.6/site-packages/pluggy/callers.py&quot;, line 187, in _multicall
+    res = hook_impl.function(*args)
+  File &quot;/home/bridgeit/PycharmProjects/Pythonautomation/venv/lib/python3.6/site-packages/_pytest/runner.py&quot;, line 84, in pytest_runtest_protocol
+    runtestprotocol(item, nextitem=nextitem)
+  File &quot;/home/bridgeit/PycharmProjects/Pythonautomation/venv/lib/python3.6/site-packages/_pytest/runner.py&quot;, line 99, in runtestprotocol
+    reports.append(call_and_report(item, &quot;call&quot;, log))
+  File &quot;/home/bridgeit/PycharmProjects/Pythonautomation/venv/lib/python3.6/site-packages/_pytest/runner.py&quot;, line 185, in call_and_report
+    call = call_runtest_hook(item, when, **kwds)
+  File &quot;/home/bridgeit/PycharmProjects/Pythonautomation/venv/lib/python3.6/site-packages/_pytest/runner.py&quot;, line 210, in call_runtest_hook
+    lambda: ihook(item=item, **kwds), when=when, reraise=reraise
+  File &quot;/home/bridgeit/PycharmProjects/Pythonautomation/venv/lib/python3.6/site-packages/_pytest/runner.py&quot;, line 237, in from_call
+    result = func()
+  File &quot;/home/bridgeit/PycharmProjects/Pythonautomation/venv/lib/python3.6/site-packages/_pytest/runner.py&quot;, line 210, in &lt;lambda&gt;
+    lambda: ihook(item=item, **kwds), when=when, reraise=reraise
+  File &quot;/home/bridgeit/PycharmProjects/Pythonautomation/venv/lib/python3.6/site-packages/pluggy/hooks.py&quot;, line 286, in __call__
+    return self._hookexec(self, self.get_hookimpls(), kwargs)
+  File &quot;/home/bridgeit/PycharmProjects/Pythonautomation/venv/lib/python3.6/site-packages/pluggy/manager.py&quot;, line 93, in _hookexec
+    return self._inner_hookexec(hook, methods, kwargs)
+  File &quot;/home/bridgeit/PycharmProjects/Pythonautomation/venv/lib/python3.6/site-packages/pluggy/manager.py&quot;, line 87, in &lt;lambda&gt;
+    firstresult=hook.spec.opts.get(&quot;firstresult&quot;) if hook.spec else False,
+  File &quot;/home/bridgeit/PycharmProjects/Pythonautomation/venv/lib/python3.6/site-packages/pluggy/callers.py&quot;, line 187, in _multicall
+    res = hook_impl.function(*args)
+  File &quot;/home/bridgeit/PycharmProjects/Pythonautomation/venv/lib/python3.6/site-packages/_pytest/runner.py&quot;, line 134, in pytest_runtest_call
+    item.runtest()
+  File &quot;/home/bridgeit/PycharmProjects/Pythonautomation/venv/lib/python3.6/site-packages/_pytest/python.py&quot;, line 1445, in runtest
+    self.ihook.pytest_pyfunc_call(pyfuncitem=self)
+  File &quot;/home/bridgeit/PycharmProjects/Pythonautomation/venv/lib/python3.6/site-packages/pluggy/hooks.py&quot;, line 286, in __call__
+    return self._hookexec(self, self.get_hookimpls(), kwargs)
+  File &quot;/home/bridgeit/PycharmProjects/Pythonautomation/venv/lib/python3.6/site-packages/pluggy/manager.py&quot;, line 93, in _hookexec
+    return self._inner_hookexec(hook, methods, kwargs)
+  File &quot;/home/bridgeit/PycharmProjects/Pythonautomation/venv/lib/python3.6/site-packages/pluggy/manager.py&quot;, line 87, in &lt;lambda&gt;
+    firstresult=hook.spec.opts.get(&quot;firstresult&quot;) if hook.spec else False,
+  File &quot;/home/bridgeit/PycharmProjects/Pythonautomation/venv/lib/python3.6/site-packages/pluggy/callers.py&quot;, line 187, in _multicall
+    res = hook_impl.function(*args)
+  File &quot;/home/bridgeit/PycharmProjects/Pythonautomation/venv/lib/python3.6/site-packages/_pytest/python.py&quot;, line 167, in pytest_pyfunc_call
+    result = testfunction(**testargs)
+  File &quot;/home/bridgeit/PycharmProjects/Pythonautomation/tests/test_e2e.py&quot;, line 27, in test_e2e
+    log.info(checkoutpage,&quot;soem one&quot;)
+Message: &lt;page_objects.checkout_page.CheckoutPage object at 0x7f8865db2748&gt;
+Arguments: (&#x27;soem one&#x27;,)
+--- Logging error ---
+Traceback (most recent call last):
+  File &quot;/usr/lib/python3.6/logging/__init__.py&quot;, line 994, in emit
+    msg = self.format(record)
+  File &quot;/usr/lib/python3.6/logging/__init__.py&quot;, line 840, in format
+    return fmt.format(record)
+  File &quot;/home/bridgeit/PycharmProjects/Pythonautomation/venv/lib/python3.6/site-packages/_pytest/logging.py&quot;, line 70, in format
+    return super().format(record)
+  File &quot;/usr/lib/python3.6/logging/__init__.py&quot;, line 577, in format
+    record.message = record.getMessage()
+  File &quot;/usr/lib/python3.6/logging/__init__.py&quot;, line 338, in getMessage
+    msg = msg % self.args
+TypeError: not all arguments converted during string formatting
+Call stack:
+  File &quot;/home/bridgeit/PycharmProjects/Pythonautomation/venv/bin/py.test&quot;, line 10, in &lt;module&gt;
+    sys.exit(main())
+  File &quot;/home/bridgeit/PycharmProjects/Pythonautomation/venv/lib/python3.6/site-packages/_pytest/config/__init__.py&quot;, line 93, in main
+    config=config
+  File &quot;/home/bridgeit/PycharmProjects/Pythonautomation/venv/lib/python3.6/site-packages/pluggy/hooks.py&quot;, line 286, in __call__
+    return self._hookexec(self, self.get_hookimpls(), kwargs)
+  File &quot;/home/bridgeit/PycharmProjects/Pythonautomation/venv/lib/python3.6/site-packages/pluggy/manager.py&quot;, line 93, in _hookexec
+    return self._inner_hookexec(hook, methods, kwargs)
+  File &quot;/home/bridgeit/PycharmProjects/Pythonautomation/venv/lib/python3.6/site-packages/pluggy/manager.py&quot;, line 87, in &lt;lambda&gt;
+    firstresult=hook.spec.opts.get(&quot;firstresult&quot;) if hook.spec else False,
+  File &quot;/home/bridgeit/PycharmProjects/Pythonautomation/venv/lib/python3.6/site-packages/pluggy/callers.py&quot;, line 187, in _multicall
+    res = hook_impl.function(*args)
+  File &quot;/home/bridgeit/PycharmProjects/Pythonautomation/venv/lib/python3.6/site-packages/_pytest/main.py&quot;, line 240, in pytest_cmdline_main
+    return wrap_session(config, _main)
+  File &quot;/home/bridgeit/PycharmProjects/Pythonautomation/venv/lib/python3.6/site-packages/_pytest/main.py&quot;, line 197, in wrap_session
+    session.exitstatus = doit(config, session) or 0
+  File &quot;/home/bridgeit/PycharmProjects/Pythonautomation/venv/lib/python3.6/site-packages/_pytest/main.py&quot;, line 247, in _main
+    config.hook.pytest_runtestloop(session=session)
+  File &quot;/home/bridgeit/PycharmProjects/Pythonautomation/venv/lib/python3.6/site-packages/pluggy/hooks.py&quot;, line 286, in __call__
+    return self._hookexec(self, self.get_hookimpls(), kwargs)
+  File &quot;/home/bridgeit/PycharmProjects/Pythonautomation/venv/lib/python3.6/site-packages/pluggy/manager.py&quot;, line 93, in _hookexec
+    return self._inner_hookexec(hook, methods, kwargs)
+  File &quot;/home/bridgeit/PycharmProjects/Pythonautomation/venv/lib/python3.6/site-packages/pluggy/manager.py&quot;, line 87, in &lt;lambda&gt;
+    firstresult=hook.spec.opts.get(&quot;firstresult&quot;) if hook.spec else False,
+  File &quot;/home/bridgeit/PycharmProjects/Pythonautomation/venv/lib/python3.6/site-packages/pluggy/callers.py&quot;, line 187, in _multicall
+    res = hook_impl.function(*args)
+  File &quot;/home/bridgeit/PycharmProjects/Pythonautomation/venv/lib/python3.6/site-packages/_pytest/main.py&quot;, line 271, in pytest_runtestloop
+    item.config.hook.pytest_runtest_protocol(item=item, nextitem=nextitem)
+  File &quot;/home/bridgeit/PycharmProjects/Pythonautomation/venv/lib/python3.6/site-packages/pluggy/hooks.py&quot;, line 286, in __call__
+    return self._hookexec(self, self.get_hookimpls(), kwargs)
+  File &quot;/home/bridgeit/PycharmProjects/Pythonautomation/venv/lib/python3.6/site-packages/pluggy/manager.py&quot;, line 93, in _hookexec
+    return self._inner_hookexec(hook, methods, kwargs)
+  File &quot;/home/bridgeit/PycharmProjects/Pythonautomation/venv/lib/python3.6/site-packages/pluggy/manager.py&quot;, line 87, in &lt;lambda&gt;
+    firstresult=hook.spec.opts.get(&quot;firstresult&quot;) if hook.spec else False,
+  File &quot;/home/bridgeit/PycharmProjects/Pythonautomation/venv/lib/python3.6/site-packages/pluggy/callers.py&quot;, line 187, in _multicall
+    res = hook_impl.function(*args)
+  File &quot;/home/bridgeit/PycharmProjects/Pythonautomation/venv/lib/python3.6/site-packages/_pytest/runner.py&quot;, line 84, in pytest_runtest_protocol
+    runtestprotocol(item, nextitem=nextitem)
+  File &quot;/home/bridgeit/PycharmProjects/Pythonautomation/venv/lib/python3.6/site-packages/_pytest/runner.py&quot;, line 99, in runtestprotocol
+    reports.append(call_and_report(item, &quot;call&quot;, log))
+  File &quot;/home/bridgeit/PycharmProjects/Pythonautomation/venv/lib/python3.6/site-packages/_pytest/runner.py&quot;, line 185, in call_and_report
+    call = call_runtest_hook(item, when, **kwds)
+  File &quot;/home/bridgeit/PycharmProjects/Pythonautomation/venv/lib/python3.6/site-packages/_pytest/runner.py&quot;, line 210, in call_runtest_hook
+    lambda: ihook(item=item, **kwds), when=when, reraise=reraise
+  File &quot;/home/bridgeit/PycharmProjects/Pythonautomation/venv/lib/python3.6/site-packages/_pytest/runner.py&quot;, line 237, in from_call
+    result = func()
+  File &quot;/home/bridgeit/PycharmProjects/Pythonautomation/venv/lib/python3.6/site-packages/_pytest/runner.py&quot;, line 210, in &lt;lambda&gt;
+    lambda: ihook(item=item, **kwds), when=when, reraise=reraise
+  File &quot;/home/bridgeit/PycharmProjects/Pythonautomation/venv/lib/python3.6/site-packages/pluggy/hooks.py&quot;, line 286, in __call__
+    return self._hookexec(self, self.get_hookimpls(), kwargs)
+  File &quot;/home/bridgeit/PycharmProjects/Pythonautomation/venv/lib/python3.6/site-packages/pluggy/manager.py&quot;, line 93, in _hookexec
+    return self._inner_hookexec(hook, methods, kwargs)
+  File &quot;/home/bridgeit/PycharmProjects/Pythonautomation/venv/lib/python3.6/site-packages/pluggy/manager.py&quot;, line 87, in &lt;lambda&gt;
+    firstresult=hook.spec.opts.get(&quot;firstresult&quot;) if hook.spec else False,
+  File &quot;/home/bridgeit/PycharmProjects/Pythonautomation/venv/lib/python3.6/site-packages/pluggy/callers.py&quot;, line 187, in _multicall
+    res = hook_impl.function(*args)
+  File &quot;/home/bridgeit/PycharmProjects/Pythonautomation/venv/lib/python3.6/site-packages/_pytest/runner.py&quot;, line 134, in pytest_runtest_call
+    item.runtest()
+  File &quot;/home/bridgeit/PycharmProjects/Pythonautomation/venv/lib/python3.6/site-packages/_pytest/python.py&quot;, line 1445, in runtest
+    self.ihook.pytest_pyfunc_call(pyfuncitem=self)
+  File &quot;/home/bridgeit/PycharmProjects/Pythonautomation/venv/lib/python3.6/site-packages/pluggy/hooks.py&quot;, line 286, in __call__
+    return self._hookexec(self, self.get_hookimpls(), kwargs)
+  File &quot;/home/bridgeit/PycharmProjects/Pythonautomation/venv/lib/python3.6/site-packages/pluggy/manager.py&quot;, line 93, in _hookexec
+    return self._inner_hookexec(hook, methods, kwargs)
+  File &quot;/home/bridgeit/PycharmProjects/Pythonautomation/venv/lib/python3.6/site-packages/pluggy/manager.py&quot;, line 87, in &lt;lambda&gt;
+    firstresult=hook.spec.opts.get(&quot;firstresult&quot;) if hook.spec else False,
+  File &quot;/home/bridgeit/PycharmProjects/Pythonautomation/venv/lib/python3.6/site-packages/pluggy/callers.py&quot;, line 187, in _multicall
+    res = hook_impl.function(*args)
+  File &quot;/home/bridgeit/PycharmProjects/Pythonautomation/venv/lib/python3.6/site-packages/_pytest/python.py&quot;, line 167, in pytest_pyfunc_call
+    result = testfunction(**testargs)
+  File &quot;/home/bridgeit/PycharmProjects/Pythonautomation/tests/test_e2e.py&quot;, line 27, in test_e2e
+    log.info(checkoutpage,&quot;soem one&quot;)
+  File &quot;/usr/lib/python3.6/logging/__init__.py&quot;, line 1308, in info
+    self._log(INFO, msg, args, **kwargs)
+  File &quot;/usr/lib/python3.6/logging/__init__.py&quot;, line 1444, in _log
+    self.handle(record)
+  File &quot;/usr/lib/python3.6/logging/__init__.py&quot;, line 1454, in handle
+    self.callHandlers(record)
+  File &quot;/usr/lib/python3.6/logging/__init__.py&quot;, line 1516, in callHandlers
+    hdlr.handle(record)
+  File &quot;/usr/lib/python3.6/logging/__init__.py&quot;, line 865, in handle
+    self.emit(record)
+  File &quot;/home/bridgeit/PycharmProjects/Pythonautomation/venv/lib/python3.6/site-packages/_pytest/logging.py&quot;, line 301, in emit
+    logging.StreamHandler.emit(self, record)
+Message: &lt;page_objects.checkout_page.CheckoutPage object at 0x7f8865db2748&gt;
+Arguments: (&#x27;soem one&#x27;,)
+<br/></div></td></tr></tbody></table></body></html>
