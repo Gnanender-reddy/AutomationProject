@@ -26,7 +26,7 @@ class TestHomePage(BaseClass):
 
         alertText = homepage.getSuccessMessage().text
 
-        assert ("Succesfghdhfs" in alertText)
+        assert ("Success" in alertText)
         self.driver.refresh()
 
         # //*[contains(@class,'alert-success')] -->own xpath
